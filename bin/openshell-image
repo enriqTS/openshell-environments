@@ -1,0 +1,108 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+SCRIPT_PATH="$(readlink -f -- "${BASH_SOURCE[0]}")"
+ROOT="$(cd -- "$(dirname -- "$SCRIPT_PATH")/.." && pwd -P)"
+VERSION="$(<"$ROOT/VERSION")"
+REGISTRY="${OPENSHELL_IMAGE_REGISTRY:-localhost/openshell-environments}"
+BASE_IMAGE="${OPENSHELL_BASE_IMAGE:-$REGISTRY/base:$VERSION}"
+PI_IMAGE="${PI_OPENSHELL_IMAGE:-$REGISTRY/pi:$VERSION}"
+
+revision() {
+  git -C "$1" rev-parse HEAD 2>/dev/null || printf unknown
+}
+
+require_docker() {
+  command -v docker >/dev/null 2>&1 || {
+    printf 'openshell-image: docker is required\n' >&2
+    exit 127
+  }
+}
+
+build_base() {
+  require_docker
+  docker buildx build --pull --load \
+    --build-arg "OPENSHELL_ENVIRONMENTS_VERSION=$VERSION" \
+    --build-arg "OPENSHELL_ENVIRONMENTS_REVISION=$(revision "$ROOT")" \
+    -t "$BASE_IMAGE" "$ROOT/base"
+}
+
+build_pi() {
+  require_docker
+  local pi_source="${1:-${PI_CUSTOMIZATIONS_DIR:-}}"
+  if [[ -z "$pi_source" || ! -d "$pi_source/.git" ]]; then
+    printf 'usage: openshell-image build pi --pi-source /path/to/pi-customizations\n' >&2
+    exit 2
+  fi
+  pi_source="$(cd -- "$pi_source" && pwd -P)"
+  docker image inspect "$BASE_IMAGE" >/dev/null 2>&1 || {
+    printf 'openshell-image: base image is absent; run: %q build base\n' "$0" >&2
+    exit 1
+  }
+  local context
+  context="$(mktemp -d)"
+  trap 'rm -rf -- "$context"' RETURN
+  cp "$ROOT/clients/pi/Dockerfile" "$context/Dockerfile"
+  mkdir "$context/pi-customizations"
+  # Build from the reviewed working tree, but never include repository metadata,
+  # ignored artifacts, credentials, or unrelated files outside the checkout.
+  git -C "$pi_source" archive --format=tar HEAD | tar -xf - -C "$context/pi-customizations"
+  docker buildx build --load \
+    --build-arg "BASE_IMAGE=$BASE_IMAGE" \
+    --build-arg "OPENSHELL_ENVIRONMENTS_VERSION=$VERSION" \
+    --build-arg "OPENSHELL_ENVIRONMENTS_REVISION=$(revision "$ROOT")" \
+    --build-arg "PI_CUSTOMIZATIONS_REVISION=$(revision "$pi_source")" \
+    -t "$PI_IMAGE" "$context"
+  rm -rf -- "$context"
+  trap - RETURN
+}
+
+command="${1:-}"
+case "$command" in
+  build)
+    target="${2:-}"
+    shift 2 || true
+    case "$target" in
+      base) build_base ;;
+      pi)
+        pi_source=""
+        while (($#)); do
+          case "$1" in
+            --pi-source) pi_source="${2:-}"; shift 2 ;;
+            *) printf 'openshell-image: unknown argument: %s\n' "$1" >&2; exit 2 ;;
+          esac
+        done
+        build_pi "$pi_source"
+        ;;
+      all)
+        pi_source=""
+        while (($#)); do
+          case "$1" in
+            --pi-source) pi_source="${2:-}"; shift 2 ;;
+            *) printf 'openshell-image: unknown argument: %s\n' "$1" >&2; exit 2 ;;
+          esac
+        done
+        build_base
+        build_pi "$pi_source"
+        ;;
+      *) printf 'usage: openshell-image build {base|pi|all} [--pi-source PATH]\n' >&2; exit 2 ;;
+    esac
+    ;;
+  inspect)
+    require_docker
+    target="${2:-pi}"
+    [[ "$target" == base ]] && image="$BASE_IMAGE" || image="$PI_IMAGE"
+    docker image inspect "$image"
+    ;;
+  cleanup)
+    require_docker
+    docker image rm "$PI_IMAGE" "$BASE_IMAGE"
+    ;;
+  refs)
+    printf 'base=%s\npi=%s\n' "$BASE_IMAGE" "$PI_IMAGE"
+    ;;
+  *)
+    printf 'usage: openshell-image {build {base|pi|all}|inspect [base|pi]|cleanup|refs}\n' >&2
+    exit 2
+    ;;
+esac

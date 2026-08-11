@@ -1,0 +1,203 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+SCRIPT_PATH="$(readlink -f -- "${BASH_SOURCE[0]}")"
+ROOT="$(cd -- "$(dirname -- "$SCRIPT_PATH")/.." && pwd -P)"
+
+image=""
+policy=""
+provider=""
+name_prefix="sandbox"
+client_hook=""
+client_command=()
+recovery_command=()
+exec_env=()
+build_hint=""
+recovery_mode=""
+recovery_sandbox=""
+
+while (($#)); do
+  case "$1" in
+    --image) image="${2:-}"; shift 2 ;;
+    --policy) policy="${2:-}"; shift 2 ;;
+    --provider) provider="${2:-}"; shift 2 ;;
+    --name-prefix) name_prefix="${2:-}"; shift 2 ;;
+    --client-hook) client_hook="${2:-}"; shift 2 ;;
+    --command) client_command+=("${2:-}"); shift 2 ;;
+    --command-arg) client_command+=("${2:-}"); shift 2 ;;
+    --recovery-command) recovery_command+=("${2:-}"); shift 2 ;;
+    --recovery-command-arg) recovery_command+=("${2:-}"); shift 2 ;;
+    --exec-env) exec_env+=("${2:-}"); shift 2 ;;
+    --build-hint) build_hint="${2:-}"; shift 2 ;;
+    --recover)
+      recovery_mode=interactive
+      recovery_sandbox="${2:-}"
+      shift 2
+      ;;
+    --recover-download)
+      recovery_mode=download
+      recovery_sandbox="${2:-}"
+      shift 2
+      ;;
+    --) shift; break ;;
+    *) printf 'openshell-workspace: unknown option: %s\n' "$1" >&2; exit 2 ;;
+  esac
+done
+client_args=("$@")
+
+[[ -n "$image" ]] || { printf 'openshell-workspace: --image is required\n' >&2; exit 2; }
+[[ -n "$policy" && -f "$policy" ]] || { printf 'openshell-workspace: policy is missing: %s\n' "$policy" >&2; exit 2; }
+((${#client_command[@]})) || { printf 'openshell-workspace: --command is required\n' >&2; exit 2; }
+if [[ -n "$recovery_mode" && -z "$recovery_sandbox" ]]; then
+  printf 'openshell-workspace: recovery requires a sandbox name\n' >&2
+  exit 2
+fi
+if [[ "$image" != */* || ( "$image" != *:* && "$image" != *@* ) ]]; then
+  printf 'openshell-workspace: --image must be a full, versioned image reference: %s\n' "$image" >&2
+  exit 2
+fi
+if [[ -n "$client_hook" && ! -x "$client_hook" ]]; then
+  printf 'openshell-workspace: client hook is not executable: %s\n' "$client_hook" >&2
+  exit 2
+fi
+if [[ -z "${OPENSHELL_GATEWAY:-}" ]]; then export OPENSHELL_GATEWAY=local; fi
+command -v openshell >/dev/null 2>&1 || { printf 'openshell-workspace: openshell CLI is not on PATH\n' >&2; exit 127; }
+[[ -d "$PWD" ]] || { printf 'openshell-workspace: current directory does not exist: %s\n' "$PWD" >&2; exit 1; }
+
+host_workspace="$(pwd -P)"
+host_workdir="$host_workspace"
+relative_workdir=""
+git_dir=""
+git_name=""
+git_email=""
+if git -C "$host_workspace" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  repo_root="$(git -C "$host_workspace" rev-parse --show-toplevel)"
+  repo_root="$(cd -- "$repo_root" && pwd -P)"
+  case "$host_workspace/" in "$repo_root/"*) ;; *) printf 'openshell-workspace: workdir is outside repository root\n' >&2; exit 1;; esac
+  relative_workdir="${host_workspace#"$repo_root"}"
+  host_workspace="$repo_root"
+  git_dir="$(readlink -f -- "$(git -C "$repo_root" rev-parse --absolute-git-dir)")"
+  if [[ "$git_dir" != "$repo_root/.git" || ! -d "$repo_root/.git" || -L "$repo_root/.git" ]]; then
+    printf 'openshell-workspace: only an ordinary repository-root .git directory is supported\n' >&2
+    exit 1
+  fi
+  "$ROOT/bin/openshell-git-check" "$git_dir"
+  git_name="$(git -C "$repo_root" config user.name || true)"
+  git_email="$(git -C "$repo_root" config user.email || true)"
+fi
+
+sandbox_workspace="/workspace/$(basename -- "$host_workspace")"
+sandbox_workdir="$sandbox_workspace$relative_workdir"
+project_name="$(basename -- "$host_workspace" | tr '[:upper:]' '[:lower:]' | tr -cs '[:lower:][:digit:]' '-' | sed 's/^-*//; s/-*$//')"
+project_name="${project_name:-workspace}"
+project_name="${project_name:0:8}"
+name_prefix="$(printf %s "$name_prefix" | tr -cs '[:lower:][:digit:]' '-' | sed 's/^-*//; s/-*$//' | cut -c1-5)"
+name_prefix="${name_prefix:-box}"
+sandbox_name="${recovery_sandbox:-${name_prefix}-${project_name}-$$}"
+
+sandbox_created=0
+tracked_manifest=""
+download_stage=""
+client_context=""
+cleanup() {
+  local status=$?
+  local sync_failed=0
+  local prune_failed=0
+  trap - EXIT INT TERM
+  if ((sandbox_created)); then
+    if [[ -n "$client_hook" ]]; then
+      printf '\nopenshell-workspace: synchronizing client state...\n' >&2
+      "$client_hook" download "$sandbox_name" "$host_workdir" "$sandbox_workdir" "$client_context" || sync_failed=1
+    fi
+    printf 'openshell-workspace: downloading workspace changes...\n' >&2
+    if [[ -n "$git_dir" ]]; then
+      printf 'openshell-workspace: removing Git-ignored sandbox artifacts...\n' >&2
+      if ! openshell sandbox exec --name "$sandbox_name" --workdir "$sandbox_workspace" --no-tty -- git clean -fdX; then
+        sync_failed=1; prune_failed=1
+      fi
+      download_stage="$(mktemp -d)"
+      if ((prune_failed)); then :
+      elif ! openshell sandbox download "$sandbox_name" "$sandbox_workspace" "$download_stage"; then sync_failed=1
+      elif ! rsync -a -- "$download_stage/" "$host_workspace/"; then sync_failed=1
+      elif ! rsync -a --delete -- "$download_stage/.git/" "$host_workspace/.git/"; then sync_failed=1
+      else
+        while IFS= read -r -d '' tracked_path; do
+          if [[ ! -e "$download_stage/$tracked_path" && ! -L "$download_stage/$tracked_path" ]]; then
+            rm -f -- "$host_workspace/$tracked_path" || sync_failed=1
+          fi
+        done <"$tracked_manifest"
+      fi
+    elif ! openshell sandbox download "$sandbox_name" "$sandbox_workspace" "$host_workspace"; then
+      sync_failed=1
+    fi
+    if ((sync_failed)); then
+      printf 'openshell-workspace: download/sync failed; sandbox retained as %s\n' "$sandbox_name" >&2
+      ((status == 0)) && status=1
+    else
+      openshell sandbox delete "$sandbox_name" >/dev/null 2>&1 || true
+    fi
+  fi
+  [[ -z "$download_stage" ]] || rm -rf -- "$download_stage"
+  [[ -z "$tracked_manifest" ]] || rm -f -- "$tracked_manifest"
+  [[ -z "$client_context" ]] || rm -rf -- "$client_context"
+  exit "$status"
+}
+trap cleanup EXIT
+
+if [[ -n "$git_dir" ]]; then
+  command -v rsync >/dev/null 2>&1 || { printf 'openshell-workspace: rsync is required for Git workspaces\n' >&2; exit 127; }
+  tracked_manifest="$(mktemp)"
+  git -C "$host_workspace" ls-files -z >"$tracked_manifest"
+fi
+
+if [[ -n "$recovery_mode" ]]; then
+  openshell sandbox get "$sandbox_name" >/dev/null || { printf 'openshell-workspace: retained sandbox not found: %s\n' "$sandbox_name" >&2; exit 1; }
+  sandbox_created=1
+  printf 'openshell-workspace: recovering retained sandbox %s\n' "$sandbox_name" >&2
+  [[ "$recovery_mode" != download ]] || exit 0
+else
+  if command -v docker >/dev/null 2>&1 && ! docker image inspect "$image" >/dev/null 2>&1; then
+    printf 'openshell-workspace: selected image is absent: %s\n' "$image" >&2
+    [[ -z "$build_hint" ]] || printf 'Build it with: %s\n' "$build_hint" >&2
+    exit 1
+  fi
+  client_context="$(mktemp -d)"
+  if [[ -n "$client_hook" ]]; then
+    "$client_hook" prepare "$sandbox_name" "$host_workdir" "$sandbox_workdir" "$client_context"
+  fi
+  printf 'openshell-workspace: uploading %s to sandbox %s\n' "$host_workspace" "$sandbox_name" >&2
+  sandbox_args=(--name "$sandbox_name" --from "$image" --upload "$host_workspace:/workspace" --no-tty --policy "$policy")
+  [[ -z "$provider" || "$provider" == none ]] || sandbox_args+=(--provider "$provider")
+  if ! openshell sandbox create "${sandbox_args[@]}" -- true; then
+    openshell sandbox get "$sandbox_name" >/dev/null 2>&1 && printf 'openshell-workspace: creation failed; sandbox retained as %s\n' "$sandbox_name" >&2
+    exit 1
+  fi
+  sandbox_created=1
+  if [[ -n "$git_dir" ]]; then
+    printf 'openshell-workspace: uploading Git metadata from %s\n' "$git_dir" >&2
+    if ! openshell sandbox upload --no-git-ignore "$sandbox_name" "$git_dir" "$sandbox_workspace"; then
+      sandbox_created=0
+      printf 'openshell-workspace: Git metadata upload failed; sandbox retained as %s\n' "$sandbox_name" >&2
+      exit 1
+    fi
+  fi
+  if [[ -n "$client_hook" ]] && ! "$client_hook" upload "$sandbox_name" "$host_workdir" "$sandbox_workdir" "$client_context"; then
+    sandbox_created=0
+    printf 'openshell-workspace: client state upload failed; sandbox retained as %s\n' "$sandbox_name" >&2
+    exit 1
+  fi
+fi
+
+exec_args=(--name "$sandbox_name" --workdir "$sandbox_workdir" --tty)
+for value in "${exec_env[@]}"; do exec_args+=(--env "$value"); done
+if [[ -n "$client_hook" ]]; then
+  while IFS= read -r value; do [[ -z "$value" ]] || exec_args+=(--env "$value"); done < <("$client_hook" exec-env "$sandbox_name" "$host_workdir" "$sandbox_workdir" "$client_context")
+fi
+[[ -z "$git_name" ]] || exec_args+=(--env "GIT_AUTHOR_NAME=$git_name" --env "GIT_COMMITTER_NAME=$git_name")
+[[ -z "$git_email" ]] || exec_args+=(--env "GIT_AUTHOR_EMAIL=$git_email" --env "GIT_COMMITTER_EMAIL=$git_email")
+host_colorterm="${COLORTERM:-}"
+case "${host_colorterm,,}" in truecolor|24bit) exec_args+=(--env "COLORTERM=${host_colorterm,,}");; esac
+if [[ "$recovery_mode" == interactive && ${#recovery_command[@]} -gt 0 ]]; then command_args=("${recovery_command[@]}")
+else command_args=("${client_command[@]}")
+fi
+openshell sandbox exec "${exec_args[@]}" -- "${command_args[@]}" "${client_args[@]}"
