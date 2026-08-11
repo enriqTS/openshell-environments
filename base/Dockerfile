@@ -10,12 +10,6 @@ RUN rustup component add rustfmt clippy
 # security updates within that release.
 FROM node:24-trixie-slim
 
-ARG OPENSHELL_ENVIRONMENTS_VERSION=dev
-ARG OPENSHELL_ENVIRONMENTS_REVISION=unknown
-LABEL org.opencontainers.image.title="OpenShell development base" \
-      org.opencontainers.image.version="$OPENSHELL_ENVIRONMENTS_VERSION" \
-      org.opencontainers.image.revision="$OPENSHELL_ENVIRONMENTS_REVISION"
-
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
     bash \
@@ -47,3 +41,9 @@ ENV CARGO_HOME=/tmp/cargo \
   UV_CACHE_DIR=/tmp/uv-cache \
   PATH=/usr/local/cargo/bin:/tmp/cargo/bin:${PATH}
 WORKDIR /workspace
+
+ARG OPENSHELL_ENVIRONMENTS_VERSION=dev
+ARG OPENSHELL_ENVIRONMENTS_REVISION=unknown
+LABEL org.opencontainers.image.title="OpenShell development base" \
+      org.opencontainers.image.version="$OPENSHELL_ENVIRONMENTS_VERSION" \
+      org.opencontainers.image.revision="$OPENSHELL_ENVIRONMENTS_REVISION"

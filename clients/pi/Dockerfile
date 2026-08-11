@@ -1,16 +1,6 @@
 ARG BASE_IMAGE=localhost/openshell-environments/base:0.1.0
 FROM ${BASE_IMAGE}
 
-ARG OPENSHELL_ENVIRONMENTS_VERSION=dev
-ARG OPENSHELL_ENVIRONMENTS_REVISION=unknown
-ARG PI_CUSTOMIZATIONS_REVISION=unknown
-LABEL org.opencontainers.image.title="Pi client for OpenShell" \
-      org.opencontainers.image.version="$OPENSHELL_ENVIRONMENTS_VERSION" \
-      org.opencontainers.image.revision="$OPENSHELL_ENVIRONMENTS_REVISION" \
-      io.openshell.client="pi" \
-      io.openshell.pi-customizations.revision="$PI_CUSTOMIZATIONS_REVISION" \
-      io.openshell.compatibility="pi-customizations-api-1"
-
 RUN npm install -g --ignore-scripts @earendil-works/pi-coding-agent \
   && useradd --create-home --shell /bin/bash pi
 
@@ -36,3 +26,13 @@ ENV HOME=/home/pi \
 WORKDIR /workspace
 USER pi
 ENTRYPOINT ["/usr/local/bin/pi-openshell-entrypoint"]
+
+ARG OPENSHELL_ENVIRONMENTS_VERSION=dev
+ARG OPENSHELL_ENVIRONMENTS_REVISION=unknown
+ARG PI_CUSTOMIZATIONS_REVISION=unknown
+LABEL org.opencontainers.image.title="Pi client for OpenShell" \
+      org.opencontainers.image.version="$OPENSHELL_ENVIRONMENTS_VERSION" \
+      org.opencontainers.image.revision="$OPENSHELL_ENVIRONMENTS_REVISION" \
+      io.openshell.client="pi" \
+      io.openshell.pi-customizations.revision="$PI_CUSTOMIZATIONS_REVISION" \
+      io.openshell.compatibility="pi-customizations-api-1"
