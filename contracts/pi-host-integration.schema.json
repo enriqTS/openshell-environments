@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/enriqTS/openshell-environments/contracts/pi-host-integration.schema.json",
+  "title": "Pi OpenShell host integration package manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "name", "version", "launcherApi", "hookApi", "source", "files"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "name": { "const": "pi-openshell" },
+    "version": { "$ref": "#/$defs/version" },
+    "launcherApi": { "const": 1 },
+    "hookApi": { "const": 1 },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "revision"],
+      "properties": {
+        "repository": { "const": "https://github.com/enriqTS/pi-customizations" },
+        "revision": { "$ref": "#/$defs/revision" }
+      }
+    },
+    "files": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "sha256", "mode"],
+        "properties": {
+          "path": { "$ref": "#/$defs/safePath" },
+          "sha256": { "$ref": "#/$defs/sha256" },
+          "mode": { "enum": ["0644", "0755"] }
+        }
+      }
+    }
+  },
+  "allOf": [
+    { "properties": { "files": { "contains": { "properties": { "path": { "const": "bin/pi" } }, "required": ["path"] } } } },
+    { "properties": { "files": { "contains": { "properties": { "path": { "const": "bin/pi-openshell" } }, "required": ["path"] } } } },
+    { "properties": { "files": { "contains": { "properties": { "path": { "const": "bin/pi-openshell-hook" } }, "required": ["path"] } } } },
+    { "properties": { "files": { "contains": { "properties": { "path": { "pattern": "^lib/" } }, "required": ["path"] } } } },
+    { "properties": { "files": { "contains": { "properties": { "path": { "pattern": "^providers/" } }, "required": ["path"] } } } },
+    { "properties": { "files": { "contains": { "properties": { "path": { "const": "compatibility.json" } }, "required": ["path"] } } } }
+  ],
+  "$defs": {
+    "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$" },
+    "revision": { "type": "string", "pattern": "^[0-9a-f]{40,64}$" },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "safePath": {
+      "type": "string",
+      "pattern": "^(bin/(pi|pi-openshell|pi-openshell-hook)|lib/[^/].*|providers/[^/].*|compatibility\\.json)$"
+    }
+  }
+}

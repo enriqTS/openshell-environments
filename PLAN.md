@@ -156,4 +156,12 @@ This work is complete when a clean computer can install and run customized Pi wi
 
 ## Status
 
-Planned. The 0.1.0 source-based migration is complete and remains the rollback baseline. Next action: define the sanitized Pi artifact manifest and host integration package contract before changing image paths or publishing artifacts.
+Phase 1 complete. The 0.1.0 source-based migration remains the rollback baseline.
+
+Completed:
+
+- Added machine-readable version 1 contracts for sanitized Pi assets, the host integration package, and release compatibility metadata.
+- Defined deterministic archives, exact member allowlists, SHA-256 verification, stable-release provenance, XDG installation, atomic activation/rollback, and explicit development overrides.
+- Added fail-closed validators and tests for mutable or mismatched image references, malformed digests/checksums/revisions, unsafe or forbidden package paths, duplicate members, and incompatible APIs.
+
+Next action: implement the allowlist-based deterministic asset and host-package exporter in `pi-customizations` (Phase 2), then provide those artifacts to this repository before changing image paths. Do not publish artifacts or replace the installed `pi` symlink before clean-machine acceptance.

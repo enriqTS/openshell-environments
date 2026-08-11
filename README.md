@@ -2,9 +2,9 @@
 
 Reusable, client-isolated OpenShell development environments. This repository owns the shared toolchain image, workspace/Git lifecycle, general web policy, gateway guidance, and explicit image lifecycle. It does not own client credentials or state formats.
 
-## Initial Pi integration
+## Pi integration
 
-Compatibility: `pi-customizations` API 1 requires `openshell-environments` **0.1.0** (launcher API **1**).
+Compatibility: `pi-customizations` API 1 requires `openshell-environments` **0.1.0** (launcher API **1**). This source-based workflow remains the rollback baseline while portable releases are implemented.
 
 Commit both source trees, then build deliberately tagged local images (the build command rejects dirty repositories so image labels and contents identify an exact revision):
 
@@ -33,8 +33,10 @@ export PI_OPENSHELL_ENVIRONMENTS_DIR=/path/to/openshell-environments
 - `bin/openshell-workspace` — snapshot upload/download, Git safeguards, recovery, and client hooks.
 - `bin/openshell-image` — explicit build, inspect, reference, and cleanup commands.
 - `clients/pi/` — Pi image layer and minimum policy.
+- `contracts/` — machine-readable Pi asset, host package, and release metadata contracts.
+- `lib/pi-release-contract.mjs` — fail-closed contract validation shared with tests and future release tooling.
 - `policies/base.yaml` — default shared filesystem and public HTTP/HTTPS policy.
-- `docs/` — gateway operations, security model, and client addition contract.
+- `docs/` — gateway operations, security model, release contracts, and client addition contract.
 
 ## Validation
 
@@ -43,4 +45,4 @@ npm test
 bin/openshell-image build all --pi-source /path/to/pi-customizations
 ```
 
-See [`docs/security-model.md`](docs/security-model.md) before adding permissions and [`docs/gateway.md`](docs/gateway.md) for local operation.
+See [`docs/security-model.md`](docs/security-model.md) before adding permissions, [`docs/gateway.md`](docs/gateway.md) for local operation, and [`docs/pi-release-contracts.md`](docs/pi-release-contracts.md) for the portable distribution boundary. The contracts are defined now; no portable release is published yet.
