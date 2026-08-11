@@ -6,7 +6,7 @@ Reusable, client-isolated OpenShell development environments. This repository ow
 
 Compatibility: `pi-customizations` API 1 requires `openshell-environments` **0.1.0** (launcher API **1**).
 
-Build deliberately tagged local images:
+Commit both source trees, then build deliberately tagged local images (the build command rejects dirty repositories so image labels and contents identify an exact revision):
 
 ```bash
 bin/openshell-image build all --pi-source /path/to/pi-customizations

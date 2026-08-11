@@ -7,4 +7,4 @@ Approach:
 2. Build explicit versioned images and run lifecycle, image, policy, and Pi integration parity checks.
 3. Document gateway operations, security boundaries, client addition, compatibility, upgrades, and rollback.
 
-Status: in progress — initial shared repository and Pi client extraction created; parity validation and documentation remain.
+Status: complete — shared repository/API 1, Pi client extraction, explicit 0.1.0 image lifecycle, documentation, unit/lifecycle tests, image/tool checks, policy negatives, snapshot/session round trip, and live Codex provider request all passed. Tag `v0.1.0` is the Pi compatibility release.

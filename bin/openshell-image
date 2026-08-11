@@ -19,8 +19,17 @@ require_docker() {
   }
 }
 
+require_clean() {
+  local repository="$1"
+  [[ -z "$(git -C "$repository" status --porcelain --untracked-files=normal)" ]] || {
+    printf 'openshell-image: commit or remove changes before building: %s\n' "$repository" >&2
+    exit 1
+  }
+}
+
 build_base() {
   require_docker
+  require_clean "$ROOT"
   docker buildx build --pull --load \
     --build-arg "OPENSHELL_ENVIRONMENTS_VERSION=$VERSION" \
     --build-arg "OPENSHELL_ENVIRONMENTS_REVISION=$(revision "$ROOT")" \
@@ -35,6 +44,8 @@ build_pi() {
     exit 2
   fi
   pi_source="$(cd -- "$pi_source" && pwd -P)"
+  require_clean "$ROOT"
+  require_clean "$pi_source"
   docker image inspect "$BASE_IMAGE" >/dev/null 2>&1 || {
     printf 'openshell-image: base image is absent; run: %q build base\n' "$0" >&2
     exit 1
