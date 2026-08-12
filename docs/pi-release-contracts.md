@@ -52,7 +52,7 @@ The executable hook implements launcher/hook API 1 (`prepare`, `upload`, `downlo
 
 ## Release compatibility
 
-Each host package includes `compatibility.json`, which validates against `pi-release.schema.json` and binds exactly one environment release, immutable client image digest, host package, and asset artifact. The image is pulled using `<reference>@<digest>`; the version tag is retained for human inspection. `latest`, `dev`, tag-only, unqualified, and digest-less references are invalid in release metadata.
+Each host package includes `compatibility.json`, which validates against `pi-release.schema.json` and binds exactly one environment release, immutable client image digest, host package version/APIs, and asset artifact. The image is pulled using `<reference>@<digest>`; the version tag is retained for human inspection. `latest`, `dev`, tag-only, unqualified, and digest-less references are invalid in release metadata. The compatibility file deliberately does not contain the host archive's own checksum: doing so would create a self-referential archive. `SHA256SUMS` and release provenance bind the completed host archive externally.
 
 All four versions may evolve independently. Install or launch fails closed when an API differs from the supported schema constants, versions do not match the selected release record, a checksum differs, or the running image labels disagree with the record. The error must identify the incompatible components and recommend selecting a compatible retained version; it must not rebuild or fall back automatically.
 
@@ -69,7 +69,7 @@ Required OCI labels are:
 
 Archives use sorted bytewise paths, numeric owner/group `0`, empty owner/group names, normalized mode from the manifest, and `mtime=SOURCE_DATE_EPOCH` (the source commit time). Gzip uses no original filename or wall-clock timestamp. Identical committed inputs and tool versions must produce identical bytes.
 
-SHA-256 is mandatory at three levels: each member in its manifest, each release archive in the release compatibility record, and each downloadable archive in `SHA256SUMS`. Stable releases also require GitHub artifact attestations for both archives and the OCI image plus a keyless Sigstore signature on the digest. Consumers verify checksums unconditionally and provenance when the installer supports online verification; a future release may make provenance verification mandatory without changing artifact contents.
+SHA-256 is mandatory for each member in its manifest, for the asset archive referenced by compatibility metadata, and for every downloadable archive in `SHA256SUMS`. The host archive checksum cannot be embedded in that same archive and is therefore supplied only by `SHA256SUMS` and provenance. Stable releases also require GitHub artifact attestations for both archives and the OCI image plus a keyless Sigstore signature on the digest. Consumers verify checksums unconditionally and provenance when the installer supports online verification; a future release may make provenance verification mandatory without changing artifact contents.
 
 ## Development overrides
 

@@ -53,7 +53,7 @@ const release = () => ({
     digest: `sha256:${digest}`,
     platforms: ["linux/amd64"],
   },
-  hostIntegration: { version: "2.0.0", launcherApi: 1, hookApi: 1, sha256: checksum },
+  hostIntegration: { version: "2.0.0", launcherApi: 1, hookApi: 1 },
   piAssets: { version: "3.0.0", api: 1, sourceRevision: revision, sha256: checksum },
 });
 
@@ -111,7 +111,8 @@ test("release metadata rejects mutable, unqualified, digest-less, and mismatched
 });
 
 test("release metadata rejects missing checksums, revisions, and incompatible APIs", () => {
-  rejected((x) => { x.hostIntegration.sha256 = ""; }, validateReleaseMetadata, release(), /hostIntegration.sha256/);
+  rejected((x) => { x.hostIntegration.sha256 = checksum; }, validateReleaseMetadata, release(), /not allowed/);
+  rejected((x) => { x.piAssets.sha256 = ""; }, validateReleaseMetadata, release(), /piAssets.sha256/);
   rejected((x) => { delete x.piAssets.sourceRevision; }, validateReleaseMetadata, release(), /sourceRevision/);
   rejected((x) => { x.hostIntegration.launcherApi = 2; }, validateReleaseMetadata, release(), /launcherApi is incompatible/);
   rejected((x) => { x.piAssets.api = 2; }, validateReleaseMetadata, release(), /piAssets.api is incompatible/);

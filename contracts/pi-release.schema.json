@@ -37,12 +37,11 @@
     "hostIntegration": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["version", "launcherApi", "hookApi", "sha256"],
+      "required": ["version", "launcherApi", "hookApi"],
       "properties": {
         "version": { "$ref": "#/$defs/version" },
         "launcherApi": { "const": 1 },
-        "hookApi": { "const": 1 },
-        "sha256": { "$ref": "#/$defs/sha256" }
+        "hookApi": { "const": 1 }
       }
     },
     "piAssets": {
