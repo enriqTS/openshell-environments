@@ -22,6 +22,9 @@ test("Rust remains usable when OpenShell supplies its restricted execution PATH"
 test("Pi is a separate client layer with compatibility labels", () => {
   assert.match(pi, /^ARG BASE_IMAGE=/m);
   assert.match(pi, /COPY pi-customizations \/opt\/pi-customizations/);
+  assert.match(pi, /pi-openshell-toolchain-entrypoint/);
+  assert.match(pi, /export PATH=\/usr\/local\/cargo\/bin:\/tmp\/cargo\/bin:\$PATH/);
+  assert.match(pi, /ENTRYPOINT \["\/usr\/local\/bin\/pi-openshell-toolchain-entrypoint"\]/);
   assert.match(pi, /io\.openshell\.compatibility="pi-customizations-api-1"/);
 });
 

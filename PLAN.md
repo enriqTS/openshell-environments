@@ -168,4 +168,4 @@ Phase 2 delivered in `pi-customizations`: a clean-tree, allowlist-based determin
 
 Next action: Phase 3. Export a reviewed asset archive from a committed `pi-customizations` revision, update the Pi image to consume it under standard Pi paths, and rerun customization/security behavior tests. Do not publish artifacts or replace the installed `pi` symlink before clean-machine acceptance.
 
-Maintenance completed: the base image now makes Rust tools resilient to OpenShell's restricted Pi execution environment by placing Rustup-aware wrappers in `/usr/local/bin`; the image-toolchain test covers this requirement. Rebuild the base and Pi images before expecting the current sandbox to see the fix.
+Maintenance completed: OpenShell can replace image `PATH` at Pi exec time. The base image provides Rustup-aware `/usr/local/bin` wrappers, and the Pi image starts through a toolchain entrypoint which restores the Rust path and state before launching Pi. The image-toolchain test covers both layers. Rebuild the Pi image and create a new (non-recovery) sandbox before expecting the fix.

@@ -6,7 +6,16 @@ RUN npm install -g --ignore-scripts @earendil-works/pi-coding-agent \
 
 COPY pi-customizations /opt/pi-customizations
 COPY pi-customizations/bin/pi-openshell-entrypoint /usr/local/bin/pi-openshell-entrypoint
-RUN chmod 755 /usr/local/bin/pi-openshell-entrypoint \
+# OpenShell supplies Pi a restricted PATH when executing the entrypoint. Restore
+# the base toolchain environment before Pi starts so its child shell commands
+# inherit it, even when the exec environment overrides image ENV.
+RUN printf '%s\n' '#!/bin/sh' \
+    'export PATH=/usr/local/cargo/bin:/tmp/cargo/bin:$PATH' \
+    'export RUSTUP_HOME=/usr/local/rustup' \
+    'export CARGO_HOME=/tmp/cargo' \
+    'exec /usr/local/bin/pi-openshell-entrypoint "$@"' \
+    > /usr/local/bin/pi-openshell-toolchain-entrypoint \
+  && chmod 755 /usr/local/bin/pi-openshell-entrypoint /usr/local/bin/pi-openshell-toolchain-entrypoint \
   && node /opt/pi-customizations/bin/patch-pi-codex
 
 RUN mkdir -p /home/pi/.pi/agent \
@@ -25,7 +34,7 @@ ENV HOME=/home/pi \
   PI_CODING_AGENT_DIR=/home/pi/.pi/agent
 WORKDIR /workspace
 USER pi
-ENTRYPOINT ["/usr/local/bin/pi-openshell-entrypoint"]
+ENTRYPOINT ["/usr/local/bin/pi-openshell-toolchain-entrypoint"]
 
 ARG OPENSHELL_ENVIRONMENTS_VERSION=dev
 ARG OPENSHELL_ENVIRONMENTS_REVISION=unknown
