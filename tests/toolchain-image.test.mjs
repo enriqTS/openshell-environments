@@ -12,6 +12,13 @@ test("base provides the established development toolchain", () => {
   }
 });
 
+test("Rust remains usable when OpenShell supplies its restricted execution PATH", () => {
+  assert.match(base, /for tool in cargo rustc rustdoc rustfmt clippy-driver cargo-clippy cargo-fmt rustup/);
+  assert.match(base, /export RUSTUP_HOME=\/usr\/local\/rustup/);
+  assert.match(base, /export CARGO_HOME=\/tmp\/cargo/);
+  assert.match(base, /"\/usr\/local\/bin\/\$tool"/);
+});
+
 test("Pi is a separate client layer with compatibility labels", () => {
   assert.match(pi, /^ARG BASE_IMAGE=/m);
   assert.match(pi, /COPY pi-customizations \/opt\/pi-customizations/);

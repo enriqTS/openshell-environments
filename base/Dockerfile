@@ -32,7 +32,13 @@ COPY --from=uv /uv /uvx /usr/local/bin/
 COPY --from=ruff /ruff /usr/local/bin/ruff
 COPY --from=rust /usr/local/cargo /usr/local/cargo
 COPY --from=rust /usr/local/rustup /usr/local/rustup
-RUN corepack enable
+# OpenShell exec can supply a restricted PATH and omit image ENV.  Expose
+# wrappers in its retained /usr/local/bin and restore rustup's non-home state.
+RUN corepack enable \
+  && for tool in cargo rustc rustdoc rustfmt clippy-driver cargo-clippy cargo-fmt rustup; do \
+    printf '%s\n' '#!/bin/sh' 'export RUSTUP_HOME=/usr/local/rustup' 'export CARGO_HOME=/tmp/cargo' "exec /usr/local/cargo/bin/$tool \"\$@\"" > "/usr/local/bin/$tool"; \
+    chmod 755 "/usr/local/bin/$tool"; \
+  done
 
 ENV CARGO_HOME=/tmp/cargo \
   RUSTUP_HOME=/usr/local/rustup \

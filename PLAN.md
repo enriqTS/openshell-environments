@@ -167,3 +167,5 @@ Completed:
 Phase 2 delivered in `pi-customizations`: a clean-tree, allowlist-based deterministic exporter now produces verified asset and host-package archives with manifests, source revisions, normalized modes/timestamps, per-member checksums, package-relative runtime files, and negative security tests. No artifact was published or activated.
 
 Next action: Phase 3. Export a reviewed asset archive from a committed `pi-customizations` revision, update the Pi image to consume it under standard Pi paths, and rerun customization/security behavior tests. Do not publish artifacts or replace the installed `pi` symlink before clean-machine acceptance.
+
+Maintenance completed: the base image now makes Rust tools resilient to OpenShell's restricted Pi execution environment by placing Rustup-aware wrappers in `/usr/local/bin`; the image-toolchain test covers this requirement. Rebuild the base and Pi images before expecting the current sandbox to see the fix.
