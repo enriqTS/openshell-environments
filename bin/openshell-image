@@ -27,6 +27,23 @@ require_clean() {
   }
 }
 
+verify_pi_rust() {
+  # Run through the image entrypoint under the same restricted PATH that
+  # OpenShell gives Pi. A successful build alone cannot detect lost image ENV.
+  docker run --rm \
+    -e PATH=/usr/local/bin:/usr/bin:/bin \
+    -e RUSTUP_HOME= \
+    -e CARGO_HOME= \
+    "$PI_IMAGE" /bin/sh -ec '
+      test "$RUSTUP_HOME" = /usr/local/rustup
+      test "$CARGO_HOME" = /tmp/cargo
+      cargo --version
+      rustc --version
+      cargo fmt --version
+      cargo clippy --version
+    '
+}
+
 build_base() {
   require_docker
   require_clean "$ROOT"
@@ -64,6 +81,7 @@ build_pi() {
     --build-arg "OPENSHELL_ENVIRONMENTS_REVISION=$(revision "$ROOT")" \
     --build-arg "PI_CUSTOMIZATIONS_REVISION=$(revision "$pi_source")" \
     -t "$PI_IMAGE" "$context"
+  verify_pi_rust
   rm -rf -- "$context"
   trap - RETURN
 }

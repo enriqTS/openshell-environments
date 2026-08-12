@@ -32,4 +32,9 @@ test("image lifecycle is explicit rather than part of launch", () => {
   assert.match(imageTool, /docker buildx build/);
   assert.match(imageTool, /docker image inspect/);
   assert.match(imageTool, /docker image rm/);
+  assert.match(imageTool, /verify_pi_rust/);
+  assert.match(imageTool, /-e PATH=\/usr\/local\/bin:\/usr\/bin:\/bin/);
+  assert.match(imageTool, /test "\$RUSTUP_HOME" = \/usr\/local\/rustup/);
+  assert.match(imageTool, /test "\$CARGO_HOME" = \/tmp\/cargo/);
+  assert.match(imageTool, /cargo clippy --version/);
 });
