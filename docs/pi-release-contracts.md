@@ -21,7 +21,9 @@ image/patch-pi-codex
 
 The exporter must select committed resources explicitly; it must never package a whole checkout or `$PI_CODING_AGENT_DIR`. Credentials, auth/session data, logs, caches, settings, temporary files, VCS metadata, SSH/GPG material, shell configuration, and host-specific paths are forbidden. In particular, names matching `auth.json`, `settings.json`, `sessions`, `.git`, `.ssh`, `.gnupg`, `node_modules`, `cache`, `tmp`, `*.log`, or `*.key` must fail export even below an otherwise allowed directory.
 
-`target: agent` members install below `/home/pi/.pi/agent`; `target: image` members are image build helpers and do not remain in the agent resource tree. Phase 3 may remove image helpers after use.
+`target: agent` members install below `/home/pi/.pi/agent`; `target: image` members are image build helpers and do not remain in the agent resource tree. Phase 3 removes image helpers after use.
+
+`pi-customizations` publishes this archive itself, from its own CI, as a GitHub Release on a `pi-assets-v<version>` tag (independent of `openshell-environments`' own version): the release attaches `pi-assets-<version>.tar.gz`, `SHA256SUMS`, and a GitHub build-provenance attestation on the archive. `openshell-environments` never clones `pi-customizations`' source or runs its exporter to obtain a release artifact — it downloads the published archive, verifies it against `SHA256SUMS`, and (in CI) additionally verifies the attestation. `clients/pi/pi-assets.version` pins which published release an `openshell-environments` build consumes; bumping it is a small, reviewable commit, and a new environment release is cut only after the pinned `pi-assets` release already exists.
 
 ## Host integration package
 
@@ -71,6 +73,10 @@ Archives use sorted bytewise paths, numeric owner/group `0`, empty owner/group n
 
 SHA-256 is mandatory for each member in its manifest, for the asset archive referenced by compatibility metadata, and for every downloadable archive in `SHA256SUMS`. The host archive checksum cannot be embedded in that same archive and is therefore supplied only by `SHA256SUMS` and provenance. Stable releases also require GitHub artifact attestations for both archives and the OCI image plus a keyless Sigstore signature on the digest. Consumers verify checksums unconditionally and provenance when the installer supports online verification; a future release may make provenance verification mandatory without changing artifact contents.
 
+## Image publishing
+
+`openshell-environments`' `.github/workflows/release-images.yml` builds and publishes both images on a `v<semver>` tag that must equal `VERSION`: `base` first, then `pi` pinned to `base`'s pushed digest via `--build-arg BASE_IMAGE=<ref>@<digest>`, both pushed to `ghcr.io/enriqTS/openshell-environments/{base,pi}:<version>` with a BuildKit SBOM and provenance attestation, then signed keylessly with `cosign` over GitHub Actions OIDC (no stored keys). A `verify-clean-pull` job with no checkout step at all pulls both images by digest only and re-runs the same resource-layout and restricted-PATH Rust checks used during development, proving a machine with neither source repository present can pull and launch them. Release notes on the tag record both image references, digests, and the pinned `pi-assets` version. Only `linux/amd64` is published; broader platform support is not claimed until it is actually built and tested, not merely cross-compiled.
+
 ## Development overrides
 
 The following are explicit development controls and are never read as release defaults:
@@ -81,4 +87,4 @@ PI_OPENSHELL_INTEGRATION_DIR=/any/path/pi-customizations
 PI_OPENSHELL_IMAGE=localhost/openshell-environments/pi:dev
 ```
 
-Development tooling may accept mutable local tags and checkout paths. A package marked as a release must satisfy the stricter compatibility schema regardless of these variables.
+`bin/openshell-image build pi` additionally accepts exactly one of three source modes: `--pi-source PATH` (local checkout), `--pi-ref REF` (shallow-fetch a source ref from GitHub and export it locally), or `--pi-assets-version VERSION` (download and verify an already-published `pi-assets` release, matching what the release workflow does). The first two are development overrides for iterating before a release exists; the third is how both local builds and CI consume a real release. Development tooling may accept mutable local tags and checkout paths. A package marked as a release must satisfy the stricter compatibility schema regardless of these variables.

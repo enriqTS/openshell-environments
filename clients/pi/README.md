@@ -4,6 +4,6 @@ The image consumes only the sanitized `pi-assets` artifact that `pi-customizatio
 
 Compatibility: image/client API `pi-customizations-api-1`; `openshell-environments` 0.2.0 pairs with `pi-customizations` launcher API 1 and Pi asset API 1.
 
-`bin/openshell-image` can source `pi-customizations` from a local checkout (`--pi-source PATH`, an explicit development override) or fetch a pinned tag/branch/SHA directly from `github.com/enriqTS/pi-customizations` (`--pi-ref REF`), so building the image no longer requires a local sibling checkout. The prior whole-tree build remains available for rollback at git tag `v0.1.0`.
+`bin/openshell-image` can source `pi-customizations` from a local checkout (`--pi-source PATH`, an explicit development override), a pinned tag/branch/SHA fetched directly from `github.com/enriqTS/pi-customizations` (`--pi-ref REF`, also a development override), or an already-published, checksum-verified `pi-assets` release (`--pi-assets-version VERSION`) — the last is what both local release builds and CI use, and never clones `pi-customizations` or runs its scripts. The prior whole-tree build remains available for rollback at git tag `v0.1.0`.
 
-The separately installed host integration package and digest-pinned, published image through release compatibility metadata remain future work (Phases 4-5 of `../../PLAN.md`).
+`.github/workflows/release-images.yml` publishes `ghcr.io/enriqTS/openshell-environments/pi:<version>` (and `base`) on a version tag, digest-pinned, SBOM/provenance-attested, and cosign-signed. The separately installed host integration package and digest-pinned compatibility metadata tying it to a specific image remain future work (Phase 5 of `../../PLAN.md`).

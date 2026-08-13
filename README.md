@@ -6,17 +6,18 @@ Reusable, client-isolated OpenShell development environments. This repository ow
 
 Compatibility: `pi-customizations` API 1 pairs with `openshell-environments` **0.2.0**. The Pi image now builds from `pi-customizations`' sanitized `pi-assets` archive (see [`pi-release-contracts.md`](docs/pi-release-contracts.md)) instead of a whole checked-out tree, and installs resources into Pi's standard `/home/pi/.pi/agent` paths. The prior whole-tree build is preserved for rollback at git tag `v0.1.0`, which still produces `localhost/openshell-environments/pi:0.1.0`.
 
-Commit both source trees, then build deliberately tagged local images (the build command rejects dirty repositories so image labels and contents identify an exact revision). Source `pi-customizations` either from a local checkout or directly from GitHub:
+Commit both source trees, then build deliberately tagged local images (the build command rejects dirty repositories so image labels and contents identify an exact revision). Source `pi-customizations` from a local checkout, directly from GitHub, or from its published release (pick exactly one):
 
 ```bash
 bin/openshell-image build all --pi-source /path/to/pi-customizations
 # or, with no local checkout at all:
-bin/openshell-image build all --pi-ref main   # any tag, branch, or commit SHA
+bin/openshell-image build all --pi-ref main               # any tag, branch, or commit SHA
+bin/openshell-image build all --pi-assets-version 0.1.0    # a published pi-assets release
 bin/openshell-image refs
 bin/openshell-image inspect pi
 ```
 
-`--pi-ref` shallow-fetches the exact revision from `https://github.com/enriqTS/pi-customizations` into a throwaway directory before exporting; it never uses `main` implicitly unless you ask for it, and never mixes with `--pi-source`.
+`--pi-ref` shallow-fetches the exact revision from `https://github.com/enriqTS/pi-customizations` into a throwaway directory before exporting; it never uses `main` implicitly unless you ask for it. `--pi-assets-version` instead downloads and checksum-verifies an already-built `pi-assets-<version>.tar.gz` GitHub Release published by `pi-customizations`' own CI — no clone, no running its scripts. Exactly one of the three may be given. `.github/workflows/release-images.yml` uses `--pi-assets-version` (via `clients/pi/pi-assets.version`) to build and publish `ghcr.io/enriqTS/openshell-environments/{base,pi}:<version>` on a `v<semver>` tag; see [`pi-release-contracts.md`](docs/pi-release-contracts.md#image-publishing).
 
 The resulting client reference is `localhost/openshell-environments/pi:0.2.0`. Launchers never build implicitly. To remove this version's images:
 
