@@ -1,0 +1,205 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+# Phase 6 clean-machine acceptance: runs the published pi-openshell install
+# and a real Pi/OpenShell round trip inside a container with a fresh $HOME,
+# no source checkouts, sharing only this host's Docker socket and existing
+# OpenShell gateway trust (both explicitly out of this project's scope).
+
+PI_VERSION="${1:-0.1.0}"
+CONTAINER_NAME="openshell-clean-machine-acceptance"
+PROBE_SANDBOX="acceptance-probe"
+BASE_IMAGE="debian:trixie-slim"
+IMAGE_REF="ghcr.io/enriqts/openshell-environments/pi:0.2.0"
+
+pass=0
+fail=0
+
+check() {
+  local desc="$1"
+  shift
+  if "$@"; then
+    printf '\033[32m✔\033[0m %s\n' "$desc"
+    pass=$((pass + 1))
+  else
+    printf '\033[31m✘\033[0m %s\n' "$desc" >&2
+    fail=$((fail + 1))
+  fi
+}
+
+cexec() {
+  docker exec "$CONTAINER_NAME" bash -lc "$1"
+}
+
+cleanup() {
+  cexec "export PATH=/root/.local/bin:\$PATH; openshell sandbox delete $PROBE_SANDBOX" >/dev/null 2>&1 || true
+  docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
+}
+trap cleanup EXIT
+
+echo "=== 1. starting clean-machine container ==="
+docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
+docker run -d --name "$CONTAINER_NAME" \
+  --network host \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v "$HOME/.config/openshell:/root/.config/openshell:ro" \
+  "$BASE_IMAGE" sleep infinity >/dev/null
+
+echo "=== 2. provisioning (fresh, no source checkouts) ==="
+cexec 'set -Eeuo pipefail
+  apt-get update -qq
+  apt-get install -y -qq curl git ca-certificates docker.io nodejs rsync >/dev/null
+  curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1
+  export PATH="/root/.local/bin:$PATH"
+  uv tool install openshell >/dev/null
+'
+check "gateway reachable via reused trust (not copied credentials)" cexec 'export PATH=/root/.local/bin:$PATH; openshell whoami >/dev/null'
+
+echo "=== 3. image absent locally before first use ==="
+if docker image inspect "$IMAGE_REF" >/dev/null 2>&1; then
+  echo "note: $IMAGE_REF already present on the shared daemon from earlier verification; pull-not-build cannot be proven by absence this run"
+fi
+
+echo "=== 4. installing pi-openshell $PI_VERSION from the published release ==="
+cexec "export PATH=/root/.local/bin:\$PATH
+  curl -fsSL https://raw.githubusercontent.com/enriqTS/pi-customizations/main/bin/install-pi-openshell -o /tmp/install-pi-openshell
+  chmod +x /tmp/install-pi-openshell
+  /tmp/install-pi-openshell install $PI_VERSION
+"
+check "installs under XDG_DATA_HOME/pi-openshell/$PI_VERSION" cexec "test -x /root/.local/share/pi-openshell/$PI_VERSION/bin/pi"
+check "installs under XDG_DATA_HOME/openshell-environments/0.2.0" cexec "test -f /root/.local/share/openshell-environments/0.2.0/VERSION"
+check "symlinks XDG_BIN_HOME/pi to the installed package" cexec "[ \"\$(readlink -f /root/.local/bin/pi)\" = \"\$(readlink -f /root/.local/share/pi-openshell/$PI_VERSION/bin/pi)\" ]"
+check "no pi-customizations checkout anywhere (only the documented openshell-environments clone exists)" cexec "! find / -xdev -iname 'pi-customizations' 2>/dev/null | grep -q ."
+
+echo "=== 5. creating a long-lived probe sandbox directly ==="
+POLICY_PATH="/root/.local/share/openshell-environments/0.2.0/clients/pi/policy.yaml"
+cexec "export PATH=/root/.local/bin:\$PATH; openshell sandbox delete $PROBE_SANDBOX >/dev/null 2>&1 || true"
+# `sandbox create -- CMD` attaches to and streams CMD, which never returns for
+# `sleep infinity` — run it detached and poll for Ready instead of waiting on it.
+docker exec -d "$CONTAINER_NAME" bash -lc "export PATH=/root/.local/bin:\$PATH
+  openshell sandbox create --name $PROBE_SANDBOX --from $IMAGE_REF --policy $POLICY_PATH --provider pi-codex -- sleep infinity
+"
+ready=0
+for _ in $(seq 1 30); do
+  if cexec "export PATH=/root/.local/bin:\$PATH; openshell sandbox get $PROBE_SANDBOX 2>/dev/null | grep -qi 'Phase:.*Ready'"; then
+    ready=1
+    break
+  fi
+  sleep 2
+done
+check "probe sandbox reaches Ready" test "$ready" = 1
+check "image was pulled (present on shared daemon after use)" docker image inspect "$IMAGE_REF" >/dev/null 2>&1
+
+echo "=== 6. custom resource loading ==="
+check "agents/extensions/skills/themes present under /home/pi/.pi/agent" cexec "export PATH=/root/.local/bin:\$PATH
+  openshell sandbox exec -n $PROBE_SANDBOX -- sh -c 'test -f /home/pi/.pi/agent/agents/planner.md && test -f /home/pi/.pi/agent/extensions/terraform-guard/index.ts && test -f /home/pi/.pi/agent/APPEND_SYSTEM.md'"
+check "Pi's own package manager discovers the extensions with no settings.json" cexec "export PATH=/root/.local/bin:\$PATH
+  openshell sandbox exec -n $PROBE_SANDBOX -- node -e '
+    const { DefaultPackageManager } = require(\"/usr/local/lib/node_modules/@earendil-works/pi-coding-agent/dist/core/package-manager.js\");
+    const { SettingsManager } = require(\"/usr/local/lib/node_modules/@earendil-works/pi-coding-agent/dist/core/settings-manager.js\");
+    (async () => {
+      const cwd = \"/workspace\", agentDir = \"/home/pi/.pi/agent\";
+      const settingsManager = SettingsManager.create(cwd, agentDir);
+      const pm = new DefaultPackageManager({ cwd, agentDir, settingsManager });
+      const resolved = await pm.resolve();
+      const paths = resolved.extensions.map((r) => r.path).join(\",\");
+      if (!paths.includes(\"subagent\") || !paths.includes(\"terraform-guard\")) process.exit(1);
+    })();
+  '"
+check "attached pi-codex provider injects opaque handles (gateway-owned substitution, not host secrets)" cexec "export PATH=/root/.local/bin:\$PATH
+  openshell sandbox exec -n $PROBE_SANDBOX -- env | grep -q '^CODEX_AUTH_ACCESS_TOKEN='"
+
+echo "=== 7. terraform-guard extension logic (deterministic proxy for the live block) ==="
+check "terraform apply is flagged" cexec "export PATH=/root/.local/bin:\$PATH
+  openshell sandbox exec -n $PROBE_SANDBOX -- node -e '
+    const { isTerraformApply } = require(\"/home/pi/.pi/agent/extensions/terraform-guard/command-policy.mjs\");
+    if (!isTerraformApply(\"terraform apply\")) process.exit(1);
+  '"
+check "terraform plan/fmt are not flagged" cexec "export PATH=/root/.local/bin:\$PATH
+  openshell sandbox exec -n $PROBE_SANDBOX -- node -e '
+    const { isTerraformApply } = require(\"/home/pi/.pi/agent/extensions/terraform-guard/command-policy.mjs\");
+    if (isTerraformApply(\"terraform plan\") || isTerraformApply(\"terraform fmt\")) process.exit(1);
+  '"
+
+echo "=== 8. network policy (curl isn't in the Pi image; use node's native fetch) ==="
+check "public HTTPS succeeds" cexec "export PATH=/root/.local/bin:\$PATH
+  openshell sandbox exec -n $PROBE_SANDBOX -- node -e '
+    fetch(\"https://example.com\", { signal: AbortSignal.timeout(8000) })
+      .then((r) => process.exit(r.status === 200 ? 0 : 1))
+      .catch((e) => { console.error(String(e), e && e.cause); process.exit(1); });
+  '"
+check "link-local/metadata address is blocked" cexec "export PATH=/root/.local/bin:\$PATH
+  openshell sandbox exec -n $PROBE_SANDBOX -- node -e '
+    fetch(\"http://169.254.169.254/\", { signal: AbortSignal.timeout(5000) })
+      .then(() => process.exit(1))
+      .catch(() => process.exit(0));
+  '"
+check "port 22 is blocked" cexec "export PATH=/root/.local/bin:\$PATH
+  openshell sandbox exec -n $PROBE_SANDBOX -- node -e '
+    fetch(\"https://github.com:22/\", { signal: AbortSignal.timeout(5000) })
+      .then(() => process.exit(1))
+      .catch(() => process.exit(0));
+  '"
+
+echo "=== 9. tear down the probe sandbox; switch to the real pi launcher ==="
+cexec "export PATH=/root/.local/bin:\$PATH; openshell sandbox delete $PROBE_SANDBOX" >/dev/null 2>&1 || true
+
+echo "=== 10. disposable test git project ==="
+cexec 'set -Eeuo pipefail
+  rm -rf /root/test-project
+  mkdir -p /root/test-project
+  cd /root/test-project
+  git init -q
+  git config user.name "Acceptance Test"
+  git config user.email "test@example.invalid"
+  echo "tracked v1" > tracked.txt
+  echo "to-delete v1" > to-delete.txt
+  echo "ignored.txt" > .gitignore
+  echo "ignored v1 (host-only)" > ignored.txt
+  git add tracked.txt to-delete.txt .gitignore
+  git commit -qm "initial"
+'
+
+echo "=== 11. one real Pi conversation: Codex routing + live terraform-guard block + in-sandbox file edits ==="
+# No local auth.json exists in this fresh \$HOME, so the launcher's own
+# credential-sync step is skipped (nothing to sync); PI_OPENSHELL_PROVIDER
+# still gets the pi-codex provider *attached* to the new sandbox, which is
+# what makes the gateway substitute real credentials on outbound requests.
+# File-sync correctness is verified from host-side file state afterward,
+# not from the model's self-reported narration. The terraform-guard block
+# sets terminate:true (ends the whole turn immediately), so it must be the
+# LAST step attempted — anything after it in the same prompt would never run.
+cexec "export PATH=/root/.local/bin:\$PATH
+  cd /root/test-project
+  PI_OPENSHELL_PROVIDER=pi-codex pi --print --provider openai-codex --model gpt-5.6-sol \
+    'Using the bash tool, run this single command first: printf \"tracked v2\\n\" > tracked.txt && printf \"new file from pi\\n\" > new-tracked.txt && printf \"ignored v2 from sandbox\\n\" > ignored.txt && rm -f to-delete.txt. After that command succeeds, as your last action run: terraform apply -auto-approve -no-color. Then reply with exactly one line: BLOCKED or RAN.' \
+    > /tmp/pi-codex-response.txt 2>&1 || true
+  echo '=== RESPONSE START ==='
+  cat /tmp/pi-codex-response.txt
+  echo '=== RESPONSE END ==='
+"
+check "Pi produced a real response through the pi-codex provider (no crash/auth failure)" cexec "test -s /tmp/pi-codex-response.txt && ! grep -qiE 'No API key|invalid_api_key|unauthorized' /tmp/pi-codex-response.txt"
+check "terraform apply was blocked in the live conversation" cexec "grep -qiE 'BLOCKED|terraform apply is forbidden' /tmp/pi-codex-response.txt"
+
+echo "=== 12. git / session / settings sync round trip (verified from host-side file state) ==="
+check "tracked edit made inside the sandbox synced back" cexec "grep -q 'tracked v2' /root/test-project/tracked.txt"
+check "new tracked file created inside the sandbox synced back" cexec "test -f /root/test-project/new-tracked.txt && grep -q 'new file from pi' /root/test-project/new-tracked.txt"
+check "tracked deletion made inside the sandbox synced back" cexec "test ! -e /root/test-project/to-delete.txt"
+check "git-ignored file was pruned before download; host copy untouched by the sandbox" cexec "test -f /root/test-project/ignored.txt && grep -q 'ignored v1 (host-only)' /root/test-project/ignored.txt"
+check "current-project Pi session directory exists after the run" cexec "test -d /root/.pi/agent/sessions"
+
+echo "=== 13. version-mismatch fails closed ==="
+cexec "sed -i 's/sha256:[0-9a-f]*/sha256:0000000000000000000000000000000000000000000000000000000000000000/' /root/.local/share/pi-openshell/$PI_VERSION/compatibility.json"
+check "launcher refuses a corrupted digest with a clear message rather than silently proceeding" cexec "
+  export PATH=/root/.local/bin:\$PATH
+  cd /root/test-project
+  out=\$(pi --print --no-tools 'hi' 2>&1) || true
+  echo \"--- launcher output on corrupted digest ---\" >&2
+  echo \"\$out\" >&2
+  echo \"\$out\" | grep -qi 'invalid release image digest\|invalid compatibility metadata\|selected image is absent\|image.*absent'
+"
+
+echo
+echo "=== all checks done ==="
+echo "pass=$pass fail=$fail"
+[ "$fail" -eq 0 ]
