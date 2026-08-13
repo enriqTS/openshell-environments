@@ -1,4 +1,4 @@
-ARG BASE_IMAGE=localhost/openshell-environments/base:0.2.0
+ARG BASE_IMAGE=localhost/openshell-environments/base:0.3.0
 FROM ${BASE_IMAGE}
 
 RUN npm install -g --ignore-scripts @earendil-works/pi-coding-agent \
