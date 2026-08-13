@@ -6,11 +6,12 @@ set -Eeuo pipefail
 # no source checkouts, sharing only this host's Docker socket and existing
 # OpenShell gateway trust (both explicitly out of this project's scope).
 
-PI_VERSION="${1:-0.1.0}"
+PI_VERSION="${1:-0.2.0}"
+ENVIRONMENT_VERSION="${2:-0.3.0}"
 CONTAINER_NAME="openshell-clean-machine-acceptance"
 PROBE_SANDBOX="acceptance-probe"
 BASE_IMAGE="debian:trixie-slim"
-IMAGE_REF="ghcr.io/enriqts/openshell-environments/pi:0.2.0"
+IMAGE_REF="ghcr.io/enriqts/openshell-environments/pi:${ENVIRONMENT_VERSION}"
 
 pass=0
 fail=0
@@ -67,12 +68,12 @@ cexec "export PATH=/root/.local/bin:\$PATH
   /tmp/install-pi-openshell install $PI_VERSION
 "
 check "installs under XDG_DATA_HOME/pi-openshell/$PI_VERSION" cexec "test -x /root/.local/share/pi-openshell/$PI_VERSION/bin/pi"
-check "installs under XDG_DATA_HOME/openshell-environments/0.2.0" cexec "test -f /root/.local/share/openshell-environments/0.2.0/VERSION"
+check "installs under XDG_DATA_HOME/openshell-environments/$ENVIRONMENT_VERSION" cexec "test -f /root/.local/share/openshell-environments/$ENVIRONMENT_VERSION/VERSION"
 check "symlinks XDG_BIN_HOME/pi to the installed package" cexec "[ \"\$(readlink -f /root/.local/bin/pi)\" = \"\$(readlink -f /root/.local/share/pi-openshell/$PI_VERSION/bin/pi)\" ]"
 check "no pi-customizations checkout anywhere (only the documented openshell-environments clone exists)" cexec "! find / -xdev -iname 'pi-customizations' 2>/dev/null | grep -q ."
 
 echo "=== 5. creating a long-lived probe sandbox directly ==="
-POLICY_PATH="/root/.local/share/openshell-environments/0.2.0/clients/pi/policy.yaml"
+POLICY_PATH="/root/.local/share/openshell-environments/${ENVIRONMENT_VERSION}/clients/pi/policy.yaml"
 cexec "export PATH=/root/.local/bin:\$PATH; openshell sandbox delete $PROBE_SANDBOX >/dev/null 2>&1 || true"
 # `sandbox create -- CMD` attaches to and streams CMD, which never returns for
 # `sleep infinity` — run it detached and poll for Ready instead of waiting on it.
@@ -108,6 +109,8 @@ check "Pi's own package manager discovers the extensions with no settings.json" 
   '"
 check "attached pi-codex provider injects opaque handles (gateway-owned substitution, not host secrets)" cexec "export PATH=/root/.local/bin:\$PATH
   openshell sandbox exec -n $PROBE_SANDBOX -- env | grep -q '^CODEX_AUTH_ACCESS_TOKEN='"
+check "npm can actually write to its cache under OpenShell's restricted exec env" cexec "export PATH=/root/.local/bin:\$PATH
+  openshell sandbox exec -n $PROBE_SANDBOX -- sh -c 'mkdir -p /tmp/verify-npm && cd /tmp/verify-npm && npm init -y >/dev/null 2>&1 && npm install --no-audit --no-fund lodash >/dev/null 2>&1 && test -d node_modules/lodash'"
 
 echo "=== 7. terraform-guard extension logic (deterministic proxy for the live block) ==="
 check "terraform apply is flagged" cexec "export PATH=/root/.local/bin:\$PATH
