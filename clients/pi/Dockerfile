@@ -2,16 +2,25 @@ ARG BASE_IMAGE=localhost/openshell-environments/base:0.2.0
 FROM ${BASE_IMAGE}
 
 RUN npm install -g --ignore-scripts @earendil-works/pi-coding-agent \
-  && useradd --create-home --shell /bin/bash pi
+  && useradd --create-home --shell /bin/bash pi \
+  # This install runs as root and writes root-owned caches (npm_config_cache
+  # etc. are already set by the base image); the runtime user is "pi", so a
+  # cache baked into the image here would fail with EACCES on first use.
+  && rm -rf /tmp/npm-cache /tmp/uv-cache /tmp/corepack /root/.npm /root/.cache
 
 COPY pi-assets-*.tar.gz /tmp/pi-assets.tar.gz
-# OpenShell supplies Pi a restricted PATH when executing the entrypoint. Restore
-# the base toolchain environment before Pi starts so its child shell commands
-# inherit it, even when the exec environment overrides image ENV.
+# OpenShell supplies Pi a restricted PATH when executing the entrypoint and can
+# omit image ENV entirely. Restore the base toolchain environment before Pi
+# starts so its child shell commands inherit it: without this, npm/uv/corepack
+# fall back to their default caches under $HOME, which is read-only outside
+# /home/pi/.pi/agent, and fail (e.g. "ENOENT: mkdir '/home/pi/.npm'").
 RUN printf '%s\n' '#!/bin/sh' \
     'export PATH=/usr/local/cargo/bin:/tmp/cargo/bin:$PATH' \
     'export RUSTUP_HOME=/usr/local/rustup' \
     'export CARGO_HOME=/tmp/cargo' \
+    'export npm_config_cache=/tmp/npm-cache' \
+    'export COREPACK_HOME=/tmp/corepack' \
+    'export UV_CACHE_DIR=/tmp/uv-cache' \
     'exec /usr/local/bin/pi-openshell-entrypoint "$@"' \
     > /usr/local/bin/pi-openshell-toolchain-entrypoint \
   && chmod 755 /usr/local/bin/pi-openshell-toolchain-entrypoint

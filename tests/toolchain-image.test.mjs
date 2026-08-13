@@ -27,6 +27,13 @@ test("Pi is a separate client layer with compatibility labels", () => {
   assert.match(pi, /io\.openshell\.compatibility="pi-customizations-api-1"/);
 });
 
+test("Pi restores npm/uv/corepack cache locations and ships no root-owned build-time cache", () => {
+  assert.match(pi, /export npm_config_cache=\/tmp\/npm-cache/);
+  assert.match(pi, /export COREPACK_HOME=\/tmp\/corepack/);
+  assert.match(pi, /export UV_CACHE_DIR=\/tmp\/uv-cache/);
+  assert.match(pi, /rm -rf \/tmp\/npm-cache \/tmp\/uv-cache \/tmp\/corepack \/root\/\.npm \/root\/\.cache/);
+});
+
 test("Pi installs only the sanitized asset archive into standard resource paths", () => {
   assert.match(pi, /COPY pi-assets-\*\.tar\.gz \/tmp\/pi-assets\.tar\.gz/);
   assert.doesNotMatch(pi, /COPY pi-customizations \/opt\/pi-customizations/);
@@ -47,10 +54,11 @@ test("image lifecycle is explicit rather than part of launch", () => {
   assert.match(imageTool, /docker buildx build/);
   assert.match(imageTool, /docker image inspect/);
   assert.match(imageTool, /docker image rm/);
-  assert.match(imageTool, /verify_pi_rust/);
+  assert.match(imageTool, /verify_pi_toolchain/);
   assert.match(imageTool, /-e PATH=\/usr\/local\/bin:\/usr\/bin:\/bin/);
   assert.match(imageTool, /test "\$RUSTUP_HOME" = \/usr\/local\/rustup/);
   assert.match(imageTool, /test "\$CARGO_HOME" = \/tmp\/cargo/);
+  assert.match(imageTool, /npm install --no-audit --no-fund lodash/);
   assert.match(imageTool, /cargo clippy --version/);
 });
 

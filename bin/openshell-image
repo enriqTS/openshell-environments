@@ -28,13 +28,19 @@ require_clean() {
   }
 }
 
-verify_pi_rust() {
-  # Run through the image entrypoint under the same restricted PATH that
-  # OpenShell gives Pi. A successful build alone cannot detect lost image ENV.
+verify_pi_toolchain() {
+  # Run through the image entrypoint under the same restricted PATH and
+  # omitted ENV that OpenShell gives Pi. A successful build alone cannot
+  # detect lost image ENV, and npm/uv only fail on operations that write to
+  # their cache (a bare --version can succeed even when the cache dir would
+  # resolve to the read-only home), so exercise a real write for each.
   docker run --rm \
     -e PATH=/usr/local/bin:/usr/bin:/bin \
     -e RUSTUP_HOME= \
     -e CARGO_HOME= \
+    -e npm_config_cache= \
+    -e UV_CACHE_DIR= \
+    -e COREPACK_HOME= \
     "$PI_IMAGE" /bin/sh -ec '
       test "$RUSTUP_HOME" = /usr/local/rustup
       test "$CARGO_HOME" = /tmp/cargo
@@ -42,6 +48,11 @@ verify_pi_rust() {
       rustc --version
       cargo fmt --version
       cargo clippy --version
+      mkdir -p /tmp/verify-npm && cd /tmp/verify-npm
+      npm init -y >/dev/null
+      npm install --no-audit --no-fund lodash >/dev/null
+      test -d node_modules/lodash
+      uv --version
     '
 }
 
@@ -128,7 +139,7 @@ build_pi() {
     --build-arg "PI_CUSTOMIZATIONS_REVISION=$pi_customizations_revision" \
     --build-arg "PI_ASSETS_VERSION=$pi_assets_label_version" \
     -t "$PI_IMAGE" "$context"
-  verify_pi_rust
+  verify_pi_toolchain
 }
 
 command="${1:-}"
