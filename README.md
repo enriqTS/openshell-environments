@@ -4,17 +4,21 @@ Reusable, client-isolated OpenShell development environments. This repository ow
 
 ## Pi integration
 
-Compatibility: `pi-customizations` API 1 requires `openshell-environments` **0.1.0** (launcher API **1**). This source-based workflow remains the rollback baseline while portable releases are implemented.
+Compatibility: `pi-customizations` API 1 pairs with `openshell-environments` **0.2.0**. The Pi image now builds from `pi-customizations`' sanitized `pi-assets` archive (see [`pi-release-contracts.md`](docs/pi-release-contracts.md)) instead of a whole checked-out tree, and installs resources into Pi's standard `/home/pi/.pi/agent` paths. The prior whole-tree build is preserved for rollback at git tag `v0.1.0`, which still produces `localhost/openshell-environments/pi:0.1.0`.
 
-Commit both source trees, then build deliberately tagged local images (the build command rejects dirty repositories so image labels and contents identify an exact revision):
+Commit both source trees, then build deliberately tagged local images (the build command rejects dirty repositories so image labels and contents identify an exact revision). Source `pi-customizations` either from a local checkout or directly from GitHub:
 
 ```bash
 bin/openshell-image build all --pi-source /path/to/pi-customizations
+# or, with no local checkout at all:
+bin/openshell-image build all --pi-ref main   # any tag, branch, or commit SHA
 bin/openshell-image refs
 bin/openshell-image inspect pi
 ```
 
-The resulting client reference is `localhost/openshell-environments/pi:0.1.0`. Launchers never build implicitly. To remove this version's images:
+`--pi-ref` shallow-fetches the exact revision from `https://github.com/enriqTS/pi-customizations` into a throwaway directory before exporting; it never uses `main` implicitly unless you ask for it, and never mixes with `--pi-source`.
+
+The resulting client reference is `localhost/openshell-environments/pi:0.2.0`. Launchers never build implicitly. To remove this version's images:
 
 ```bash
 bin/openshell-image cleanup

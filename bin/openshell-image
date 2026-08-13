@@ -7,6 +7,7 @@ VERSION="$(<"$ROOT/VERSION")"
 REGISTRY="${OPENSHELL_IMAGE_REGISTRY:-localhost/openshell-environments}"
 BASE_IMAGE="${OPENSHELL_BASE_IMAGE:-$REGISTRY/base:$VERSION}"
 PI_IMAGE="${PI_OPENSHELL_IMAGE:-$REGISTRY/pi:$VERSION}"
+CANONICAL_PI_CUSTOMIZATIONS_URL="https://github.com/enriqTS/pi-customizations.git"
 
 revision() {
   git -C "$1" rev-parse HEAD 2>/dev/null || printf unknown
@@ -53,11 +54,31 @@ build_base() {
     -t "$BASE_IMAGE" "$ROOT/base"
 }
 
+fetch_pi_ref() {
+  local ref="$1" dest="$2"
+  git init -q "$dest"
+  git -C "$dest" remote add origin "$CANONICAL_PI_CUSTOMIZATIONS_URL"
+  git -C "$dest" fetch --depth 1 origin "$ref"
+  git -C "$dest" checkout -q FETCH_HEAD
+}
+
 build_pi() {
   require_docker
   local pi_source="${1:-${PI_CUSTOMIZATIONS_DIR:-}}"
+  local pi_ref="${2:-${PI_CUSTOMIZATIONS_REF:-}}"
+  local fetched="" context=""
+  trap 'rm -rf -- "${context:-}" "${fetched:-}"' RETURN
+  if [[ -n "$pi_source" && -n "$pi_ref" ]]; then
+    printf 'openshell-image: specify only one of --pi-source or --pi-ref\n' >&2
+    exit 2
+  fi
+  if [[ -n "$pi_ref" ]]; then
+    fetched="$(mktemp -d)"
+    fetch_pi_ref "$pi_ref" "$fetched"
+    pi_source="$fetched"
+  fi
   if [[ -z "$pi_source" || ! -d "$pi_source/.git" ]]; then
-    printf 'usage: openshell-image build pi --pi-source /path/to/pi-customizations\n' >&2
+    printf 'usage: openshell-image build pi {--pi-source /path/to/pi-customizations | --pi-ref REF}\n' >&2
     exit 2
   fi
   pi_source="$(cd -- "$pi_source" && pwd -P)"
@@ -67,23 +88,19 @@ build_pi() {
     printf 'openshell-image: base image is absent; run: %q build base\n' "$0" >&2
     exit 1
   }
-  local context
   context="$(mktemp -d)"
-  trap 'rm -rf -- "$context"' RETURN
   cp "$ROOT/clients/pi/Dockerfile" "$context/Dockerfile"
-  mkdir "$context/pi-customizations"
-  # Build from the reviewed working tree, but never include repository metadata,
-  # ignored artifacts, credentials, or unrelated files outside the checkout.
-  git -C "$pi_source" archive --format=tar HEAD | tar -xf - -C "$context/pi-customizations"
+  # Export only the sanitized, allowlisted asset archive; never bake the
+  # checkout, its VCS metadata, or unrelated files into the build context.
+  node "$pi_source/bin/export-pi-release.mjs" assets --version "$VERSION" --output "$context"
   docker buildx build --load \
     --build-arg "BASE_IMAGE=$BASE_IMAGE" \
     --build-arg "OPENSHELL_ENVIRONMENTS_VERSION=$VERSION" \
     --build-arg "OPENSHELL_ENVIRONMENTS_REVISION=$(revision "$ROOT")" \
     --build-arg "PI_CUSTOMIZATIONS_REVISION=$(revision "$pi_source")" \
+    --build-arg "PI_ASSETS_VERSION=$VERSION" \
     -t "$PI_IMAGE" "$context"
   verify_pi_rust
-  rm -rf -- "$context"
-  trap - RETURN
 }
 
 command="${1:-}"
@@ -95,26 +112,30 @@ case "$command" in
       base) build_base ;;
       pi)
         pi_source=""
+        pi_ref=""
         while (($#)); do
           case "$1" in
             --pi-source) pi_source="${2:-}"; shift 2 ;;
+            --pi-ref) pi_ref="${2:-}"; shift 2 ;;
             *) printf 'openshell-image: unknown argument: %s\n' "$1" >&2; exit 2 ;;
           esac
         done
-        build_pi "$pi_source"
+        build_pi "$pi_source" "$pi_ref"
         ;;
       all)
         pi_source=""
+        pi_ref=""
         while (($#)); do
           case "$1" in
             --pi-source) pi_source="${2:-}"; shift 2 ;;
+            --pi-ref) pi_ref="${2:-}"; shift 2 ;;
             *) printf 'openshell-image: unknown argument: %s\n' "$1" >&2; exit 2 ;;
           esac
         done
         build_base
-        build_pi "$pi_source"
+        build_pi "$pi_source" "$pi_ref"
         ;;
-      *) printf 'usage: openshell-image build {base|pi|all} [--pi-source PATH]\n' >&2; exit 2 ;;
+      *) printf 'usage: openshell-image build {base|pi|all} {--pi-source PATH|--pi-ref REF}\n' >&2; exit 2 ;;
     esac
     ;;
   inspect)

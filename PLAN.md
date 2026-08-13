@@ -156,16 +156,23 @@ This work is complete when a clean computer can install and run customized Pi wi
 
 ## Status
 
-Phase 2 complete. The 0.1.0 source-based migration remains the rollback baseline.
+Phase 3 complete. The 0.1.0 whole-tree image build remains the rollback baseline, reachable at git tag `v0.1.0`; the environment release version moved to 0.2.0 for the new image composition.
 
-Completed:
+Completed (Phase 1-2, contracts and exporter):
 
 - Added machine-readable version 1 contracts for sanitized Pi assets, the host integration package, and release compatibility metadata.
 - Defined deterministic archives, exact member allowlists, SHA-256 verification, stable-release provenance, XDG installation, atomic activation/rollback, and explicit development overrides.
 - Added fail-closed validators and tests for mutable or mismatched image references, malformed digests/checksums/revisions, unsafe or forbidden package paths, duplicate members, and incompatible APIs.
+- Phase 2 delivered in `pi-customizations`: a clean-tree, allowlist-based deterministic exporter produces verified asset and host-package archives with manifests, source revisions, normalized modes/timestamps, per-member checksums, package-relative runtime files, and negative security tests. No artifact was published or activated.
 
-Phase 2 delivered in `pi-customizations`: a clean-tree, allowlist-based deterministic exporter now produces verified asset and host-package archives with manifests, source revisions, normalized modes/timestamps, per-member checksums, package-relative runtime files, and negative security tests. No artifact was published or activated.
+Completed (Phase 3, standard paths inside the image):
 
-Next action: Phase 3. Export a reviewed asset archive from a committed `pi-customizations` revision, update the Pi image to consume it under standard Pi paths, and rerun customization/security behavior tests. Do not publish artifacts or replace the installed `pi` symlink before clean-machine acceptance.
+- `bin/openshell-image build pi/all` no longer copies the whole `pi-customizations` checkout into the build context. It invokes `pi-customizations/bin/export-pi-release.mjs assets` to produce the sanitized `pi-assets-<version>.tar.gz`, and only that archive enters the Docker build context.
+- The Pi image installs `agents`, `extensions`, `skills`, `themes`, and `APPEND_SYSTEM.md` directly into Pi's standard `/home/pi/.pi/agent/...` paths. Verified against the shipped Pi package that these are auto-discovered by default with no `settings.json` registration, so the image no longer generates one.
+- `/opt/pi-customizations` no longer holds the source tree; it retains only the exported `manifest.json` as a read-only audit record (version, source revision, per-file checksums).
+- Added `--pi-ref REF` to `bin/openshell-image build pi/all` as an alternative to `--pi-source PATH`: it shallow-fetches an exact tag/branch/SHA straight from `https://github.com/enriqTS/pi-customizations`, so building the image no longer requires a local sibling checkout at all. `--pi-source` remains as the explicit local-development override.
+- Added `io.openshell.pi-assets.version` and `io.openshell.pi-assets.api` OCI labels alongside the existing compatibility labels.
+
+Next action: Phase 4. Add CI that builds base and client images from tags and clean committed sources, publish version tags and immutable digests to GHCR, and generate SBOM/provenance metadata. No image has been published yet.
 
 Maintenance completed: OpenShell can replace image `PATH` at Pi exec time. The base image provides Rustup-aware `/usr/local/bin` wrappers, and the Pi image starts through a toolchain entrypoint which restores the Rust path and state before launching Pi. `openshell-image build pi/all` now runs Cargo, Rustc, Rustfmt, and Clippy through that entrypoint with the restricted OpenShell PATH, so it fails rather than reporting a build that cannot run Rust. Create a new (non-recovery) sandbox after a successful build.
