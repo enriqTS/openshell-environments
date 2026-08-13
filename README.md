@@ -25,7 +25,15 @@ The resulting client reference is `localhost/openshell-environments/pi:0.2.0`. L
 bin/openshell-image cleanup
 ```
 
-The Pi adapter is installed and invoked from `pi-customizations`. For an explicit development checkout override:
+For normal use (no local checkout of either repository), install the published host integration package from `pi-customizations`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/enriqTS/pi-customizations/main/bin/install-pi-openshell | bash -s -- install <version>
+```
+
+This downloads and checksum-verifies a `pi-openshell-v<version>` release, installs it atomically under `${XDG_DATA_HOME:-$HOME/.local/share}/pi-openshell/<version>/`, fetches the compatible `openshell-environments` release it depends on, and symlinks `${XDG_BIN_HOME:-$HOME/.local/bin}/pi`. See [`pi-release-contracts.md`](docs/pi-release-contracts.md#host-integration-package) for the full mechanics, and `install-pi-openshell {upgrade|downgrade|uninstall|list}` for managing installed versions.
+
+The Pi adapter is also installed and invoked from `pi-customizations` for local development. For an explicit development checkout override:
 
 ```bash
 export PI_OPENSHELL_ENVIRONMENTS_DIR=/path/to/openshell-environments

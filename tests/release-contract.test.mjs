@@ -117,3 +117,21 @@ test("release metadata rejects missing checksums, revisions, and incompatible AP
   rejected((x) => { x.hostIntegration.launcherApi = 2; }, validateReleaseMetadata, release(), /launcherApi is incompatible/);
   rejected((x) => { x.piAssets.api = 2; }, validateReleaseMetadata, release(), /piAssets.api is incompatible/);
 });
+
+test("the actual published 0.2.0 / pi-assets-v0.1.0 release compatibility metadata validates", () => {
+  // Real values recorded from the published releases (Phase 4/5), not
+  // fixtures: a regression check that this repo's contracts and
+  // pi-customizations' compatibility.json assembly stay mutually valid.
+  const published = {
+    schemaVersion: 1,
+    environment: { version: "0.2.0", revision: "cfb29c0c4c831bcdeedb20d7cfddba08570ae0cc" },
+    image: {
+      reference: "ghcr.io/enriqts/openshell-environments/pi:0.2.0",
+      digest: "sha256:e820b9e224a217dddaae670979566e8c20ef331be3bb2d62c94e47862c771ca0",
+      platforms: ["linux/amd64"],
+    },
+    hostIntegration: { version: "0.1.0", launcherApi: 1, hookApi: 1 },
+    piAssets: { version: "0.1.0", api: 1, sourceRevision: "c6fb70b4044438702b38c4a2ab383391786660aa", sha256: "3f35704023f79b6b04cb178d2172a7327e240e04bae49309dbb0e5d700e346cf" },
+  };
+  assert.deepEqual(validateReleaseMetadata(published), []);
+});
