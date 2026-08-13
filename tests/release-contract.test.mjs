@@ -49,7 +49,7 @@ const release = () => ({
   schemaVersion: 1,
   environment: { version: "1.2.3", revision },
   image: {
-    reference: "ghcr.io/enriqTS/openshell-environments/pi:1.2.3",
+    reference: "ghcr.io/enriqts/openshell-environments/pi:1.2.3",
     digest: `sha256:${digest}`,
     platforms: ["linux/amd64"],
   },
@@ -102,11 +102,11 @@ test("release metadata binds independently versioned compatible artifacts", () =
 });
 
 test("release metadata rejects mutable, unqualified, digest-less, and mismatched images", () => {
-  for (const reference of ["pi:1.2.3", "ghcr.io/enriqTS/openshell-environments/pi:latest", "localhost/openshell-environments/pi:dev"]) {
+  for (const reference of ["pi:1.2.3", "ghcr.io/enriqts/openshell-environments/pi:latest", "localhost/openshell-environments/pi:dev"]) {
     rejected((x) => { x.image.reference = reference; }, validateReleaseMetadata, release(), /image.reference/);
   }
   rejected((x) => { delete x.image.digest; }, validateReleaseMetadata, release(), /image.digest/);
-  rejected((x) => { x.image.reference = "ghcr.io/enriqTS/openshell-environments/pi:9.9.9"; }, validateReleaseMetadata, release(), /incompatible/);
+  rejected((x) => { x.image.reference = "ghcr.io/enriqts/openshell-environments/pi:9.9.9"; }, validateReleaseMetadata, release(), /incompatible/);
   rejected((x) => { x.image.platforms = ["linux/amd64", "linux/amd64"]; }, validateReleaseMetadata, release(), /platforms/);
 });
 

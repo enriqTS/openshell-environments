@@ -7,7 +7,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAMESPACE: enriqTS/openshell-environments
+  IMAGE_NAMESPACE: enriqts/openshell-environments
   PI_CUSTOMIZATIONS_REPO: enriqTS/pi-customizations
 
 jobs:

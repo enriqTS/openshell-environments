@@ -17,7 +17,7 @@ bin/openshell-image refs
 bin/openshell-image inspect pi
 ```
 
-`--pi-ref` shallow-fetches the exact revision from `https://github.com/enriqTS/pi-customizations` into a throwaway directory before exporting; it never uses `main` implicitly unless you ask for it. `--pi-assets-version` instead downloads and checksum-verifies an already-built `pi-assets-<version>.tar.gz` GitHub Release published by `pi-customizations`' own CI — no clone, no running its scripts. Exactly one of the three may be given. `.github/workflows/release-images.yml` uses `--pi-assets-version` (via `clients/pi/pi-assets.version`) to build and publish `ghcr.io/enriqTS/openshell-environments/{base,pi}:<version>` on a `v<semver>` tag; see [`pi-release-contracts.md`](docs/pi-release-contracts.md#image-publishing).
+`--pi-ref` shallow-fetches the exact revision from `https://github.com/enriqTS/pi-customizations` into a throwaway directory before exporting; it never uses `main` implicitly unless you ask for it. `--pi-assets-version` instead downloads and checksum-verifies an already-built `pi-assets-<version>.tar.gz` GitHub Release published by `pi-customizations`' own CI — no clone, no running its scripts. Exactly one of the three may be given. `.github/workflows/release-images.yml` uses `--pi-assets-version` (via `clients/pi/pi-assets.version`) to build and publish `ghcr.io/enriqts/openshell-environments/{base,pi}:<version>` on a `v<semver>` tag; see [`pi-release-contracts.md`](docs/pi-release-contracts.md#image-publishing).
 
 The resulting client reference is `localhost/openshell-environments/pi:0.2.0`. Launchers never build implicitly. To remove this version's images:
 

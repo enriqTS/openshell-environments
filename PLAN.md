@@ -17,7 +17,7 @@ A new computer should need Docker, OpenShell, and a bootstrap/install command, t
 
 ```bash
 pi-openshell install
-docker pull ghcr.io/enriqTS/openshell-environments/pi:<version>
+docker pull ghcr.io/enriqts/openshell-environments/pi:<version>
 pi
 ```
 
@@ -28,7 +28,7 @@ The installer should use XDG locations by default and never assume paths such as
 ### Published OCI images
 
 - Publish the Pi client image under a full versioned reference, for example:
-  `ghcr.io/enriqTS/openshell-environments/pi:0.2.0`.
+  `ghcr.io/enriqts/openshell-environments/pi:0.2.0`.
 - Also publish or record its immutable digest and prefer digest-pinned compatibility metadata for normal installations.
 - Build the image from committed, reviewed revisions only.
 - Record the `openshell-environments` revision, Pi asset revision, compatibility API, and release version as OCI labels.
@@ -177,7 +177,7 @@ Completed (Phase 4, publish OCI images — CI implemented, not yet triggered):
 
 - `pi-customizations` gained `.github/workflows/release-pi-assets.yml`: on a `pi-assets-v<version>` tag it runs the existing exporter and publishes `pi-assets-<version>.tar.gz` plus `SHA256SUMS` as a GitHub Release, with a build-provenance attestation on the archive. This repository's image build never clones `pi-customizations`' source or runs its scripts to get a release artifact — it only downloads and verifies the published one.
 - `bin/openshell-image build pi/all` gained a third source mode, `--pi-assets-version VERSION` (mutually exclusive with `--pi-source`/`--pi-ref`), which downloads and checksum-verifies that published archive. `clients/pi/pi-assets.version` pins which release an environment build consumes.
-- `.github/workflows/test.yml` runs `npm test` on every push/PR to `main`. `.github/workflows/release-images.yml`, triggered by a `v<semver>` tag matching `VERSION`, builds `base` then `pi` (pinned to `base`'s pushed digest), pushes both to `ghcr.io/enriqTS/openshell-environments/{base,pi}` with a BuildKit SBOM and provenance attestation, signs both keylessly with `cosign` over GitHub Actions OIDC, then a `verify-clean-pull` job with no checkout step at all pulls both by digest and reruns the resource-layout and restricted-PATH Rust checks — the automated form of "pull and launch on a clean machine." A `release-notes` job records both image references, digests, and the pinned `pi-assets` version. Only `linux/amd64` is published.
+- `.github/workflows/test.yml` runs `npm test` on every push/PR to `main`. `.github/workflows/release-images.yml`, triggered by a `v<semver>` tag matching `VERSION`, builds `base` then `pi` (pinned to `base`'s pushed digest), pushes both to `ghcr.io/enriqts/openshell-environments/{base,pi}` with a BuildKit SBOM and provenance attestation, signs both keylessly with `cosign` over GitHub Actions OIDC, then a `verify-clean-pull` job with no checkout step at all pulls both by digest and reruns the resource-layout and restricted-PATH Rust checks — the automated form of "pull and launch on a clean machine." A `release-notes` job records both image references, digests, and the pinned `pi-assets` version. Only `linux/amd64` is published.
 - Locally verified: `actionlint` and YAML parsing on all three workflow files, the new argument-parsing/mutual-exclusion paths, checksum-fixture verification (accepts a good archive, rejects a tampered one), the manifest-revision extraction against a real exported archive, `npm test` in both repositories, and a full real `bin/openshell-image build all --pi-source ...` end-to-end rebuild confirming no regression from the refactor. `--pi-assets-version` was confirmed to construct the exact right download URL and fail closed (404) since no release has been published yet.
 
 Not yet done: no repository has been pushed to GitHub with these commits, no `pi-assets-v0.1.0` or `v0.2.0` tag has been pushed, so neither release workflow has actually run and no image or archive is published yet. That requires explicit go-ahead, since both are public and effectively permanent once triggered (GHCR packages, Sigstore/Rekor log entries, GitHub attestations).
