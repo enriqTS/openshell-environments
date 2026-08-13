@@ -62,14 +62,27 @@ fetch_pi_ref() {
   git -C "$dest" checkout -q FETCH_HEAD
 }
 
+fetch_pi_assets_release() {
+  local version="$1" dest="$2"
+  local base="https://github.com/enriqTS/pi-customizations/releases/download/pi-assets-v${version}"
+  curl -fsSL -o "$dest/pi-assets-${version}.tar.gz" "$base/pi-assets-${version}.tar.gz"
+  curl -fsSL -o "$dest/SHA256SUMS" "$base/SHA256SUMS"
+  (cd "$dest" && sha256sum -c --ignore-missing SHA256SUMS)
+}
+
 build_pi() {
   require_docker
   local pi_source="${1:-${PI_CUSTOMIZATIONS_DIR:-}}"
   local pi_ref="${2:-${PI_CUSTOMIZATIONS_REF:-}}"
+  local pi_assets_version="${3:-${PI_CUSTOMIZATIONS_ASSETS_VERSION:-}}"
   local fetched="" context=""
   trap 'rm -rf -- "${context:-}" "${fetched:-}"' RETURN
-  if [[ -n "$pi_source" && -n "$pi_ref" ]]; then
-    printf 'openshell-image: specify only one of --pi-source or --pi-ref\n' >&2
+  local sources_given=0
+  [[ -n "$pi_source" ]] && sources_given=$((sources_given + 1))
+  [[ -n "$pi_ref" ]] && sources_given=$((sources_given + 1))
+  [[ -n "$pi_assets_version" ]] && sources_given=$((sources_given + 1))
+  if ((sources_given > 1)); then
+    printf 'openshell-image: specify only one of --pi-source, --pi-ref, or --pi-assets-version\n' >&2
     exit 2
   fi
   if [[ -n "$pi_ref" ]]; then
@@ -77,28 +90,43 @@ build_pi() {
     fetch_pi_ref "$pi_ref" "$fetched"
     pi_source="$fetched"
   fi
-  if [[ -z "$pi_source" || ! -d "$pi_source/.git" ]]; then
-    printf 'usage: openshell-image build pi {--pi-source /path/to/pi-customizations | --pi-ref REF}\n' >&2
+  if [[ -z "$pi_source" && -z "$pi_assets_version" ]]; then
+    printf 'usage: openshell-image build pi {--pi-source /path/to/pi-customizations | --pi-ref REF | --pi-assets-version VERSION}\n' >&2
     exit 2
   fi
-  pi_source="$(cd -- "$pi_source" && pwd -P)"
+  if [[ -n "$pi_source" && ! -d "$pi_source/.git" ]]; then
+    printf 'usage: openshell-image build pi {--pi-source /path/to/pi-customizations | --pi-ref REF | --pi-assets-version VERSION}\n' >&2
+    exit 2
+  fi
   require_clean "$ROOT"
-  require_clean "$pi_source"
   docker image inspect "$BASE_IMAGE" >/dev/null 2>&1 || {
     printf 'openshell-image: base image is absent; run: %q build base\n' "$0" >&2
     exit 1
   }
   context="$(mktemp -d)"
   cp "$ROOT/clients/pi/Dockerfile" "$context/Dockerfile"
-  # Export only the sanitized, allowlisted asset archive; never bake the
-  # checkout, its VCS metadata, or unrelated files into the build context.
-  node "$pi_source/bin/export-pi-release.mjs" assets --version "$VERSION" --output "$context"
+  local pi_customizations_revision pi_assets_label_version
+  if [[ -n "$pi_assets_version" ]]; then
+    # Consume an already-built, already-checksummed release published by
+    # pi-customizations; never clone its source or run its scripts here.
+    fetch_pi_assets_release "$pi_assets_version" "$context"
+    pi_customizations_revision="$(tar -xOzf "$context/pi-assets-${pi_assets_version}.tar.gz" manifest.json | node -e 'process.stdout.write(JSON.parse(require("fs").readFileSync(0,"utf8")).source.revision)')"
+    pi_assets_label_version="$pi_assets_version"
+  else
+    pi_source="$(cd -- "$pi_source" && pwd -P)"
+    require_clean "$pi_source"
+    # Export only the sanitized, allowlisted asset archive; never bake the
+    # checkout, its VCS metadata, or unrelated files into the build context.
+    node "$pi_source/bin/export-pi-release.mjs" assets --version "$VERSION" --output "$context"
+    pi_customizations_revision="$(revision "$pi_source")"
+    pi_assets_label_version="$VERSION"
+  fi
   docker buildx build --load \
     --build-arg "BASE_IMAGE=$BASE_IMAGE" \
     --build-arg "OPENSHELL_ENVIRONMENTS_VERSION=$VERSION" \
     --build-arg "OPENSHELL_ENVIRONMENTS_REVISION=$(revision "$ROOT")" \
-    --build-arg "PI_CUSTOMIZATIONS_REVISION=$(revision "$pi_source")" \
-    --build-arg "PI_ASSETS_VERSION=$VERSION" \
+    --build-arg "PI_CUSTOMIZATIONS_REVISION=$pi_customizations_revision" \
+    --build-arg "PI_ASSETS_VERSION=$pi_assets_label_version" \
     -t "$PI_IMAGE" "$context"
   verify_pi_rust
 }
@@ -113,29 +141,33 @@ case "$command" in
       pi)
         pi_source=""
         pi_ref=""
+        pi_assets_version=""
         while (($#)); do
           case "$1" in
             --pi-source) pi_source="${2:-}"; shift 2 ;;
             --pi-ref) pi_ref="${2:-}"; shift 2 ;;
+            --pi-assets-version) pi_assets_version="${2:-}"; shift 2 ;;
             *) printf 'openshell-image: unknown argument: %s\n' "$1" >&2; exit 2 ;;
           esac
         done
-        build_pi "$pi_source" "$pi_ref"
+        build_pi "$pi_source" "$pi_ref" "$pi_assets_version"
         ;;
       all)
         pi_source=""
         pi_ref=""
+        pi_assets_version=""
         while (($#)); do
           case "$1" in
             --pi-source) pi_source="${2:-}"; shift 2 ;;
             --pi-ref) pi_ref="${2:-}"; shift 2 ;;
+            --pi-assets-version) pi_assets_version="${2:-}"; shift 2 ;;
             *) printf 'openshell-image: unknown argument: %s\n' "$1" >&2; exit 2 ;;
           esac
         done
         build_base
-        build_pi "$pi_source" "$pi_ref"
+        build_pi "$pi_source" "$pi_ref" "$pi_assets_version"
         ;;
-      *) printf 'usage: openshell-image build {base|pi|all} {--pi-source PATH|--pi-ref REF}\n' >&2; exit 2 ;;
+      *) printf 'usage: openshell-image build {base|pi|all} {--pi-source PATH|--pi-ref REF|--pi-assets-version VERSION}\n' >&2; exit 2 ;;
     esac
     ;;
   inspect)

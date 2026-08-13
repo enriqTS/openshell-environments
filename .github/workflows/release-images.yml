@@ -1,0 +1,213 @@
+name: Release images
+
+on:
+  push:
+    tags:
+      - "v*"
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAMESPACE: enriqTS/openshell-environments
+  PI_CUSTOMIZATIONS_REPO: enriqTS/pi-customizations
+
+jobs:
+  build-base:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      image: ${{ steps.version.outputs.image }}
+      digest: ${{ steps.build.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate tag matches VERSION
+        id: version
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          version="${tag#v}"
+          file_version="$(cat VERSION)"
+          if [[ "$version" != "$file_version" ]]; then
+            printf 'release-images: tag v%s does not match VERSION file (%s)\n' "$version" "$file_version" >&2
+            exit 1
+          fi
+          printf 'version=%s\n' "$version" >> "$GITHUB_OUTPUT"
+          printf 'image=%s/%s/base\n' "$REGISTRY" "$IMAGE_NAMESPACE" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push base image
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: base
+          push: true
+          sbom: true
+          provenance: true
+          tags: ${{ steps.version.outputs.image }}:${{ steps.version.outputs.version }}
+          build-args: |
+            OPENSHELL_ENVIRONMENTS_VERSION=${{ steps.version.outputs.version }}
+            OPENSHELL_ENVIRONMENTS_REVISION=${{ github.sha }}
+
+  build-pi:
+    needs: build-base
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.pin.outputs.image }}
+      digest: ${{ steps.build.outputs.digest }}
+      pi-assets-version: ${{ steps.pin.outputs.pi_assets_version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "lts/*"
+
+      - name: Read pinned pi-assets release
+        id: pin
+        run: |
+          printf 'pi_assets_version=%s\n' "$(cat clients/pi/pi-assets.version)" >> "$GITHUB_OUTPUT"
+          printf 'image=%s/%s/pi\n' "$REGISTRY" "$IMAGE_NAMESPACE" >> "$GITHUB_OUTPUT"
+
+      - name: Download and verify pinned pi-assets release
+        run: |
+          mkdir -p build-context
+          cp clients/pi/Dockerfile build-context/Dockerfile
+          version="${{ steps.pin.outputs.pi_assets_version }}"
+          base_url="https://github.com/${PI_CUSTOMIZATIONS_REPO}/releases/download/pi-assets-v${version}"
+          curl -fsSL -o "build-context/pi-assets-${version}.tar.gz" "$base_url/pi-assets-${version}.tar.gz"
+          curl -fsSL -o build-context/SHA256SUMS "$base_url/SHA256SUMS"
+          (cd build-context && sha256sum -c --ignore-missing SHA256SUMS)
+
+      - name: Verify archive provenance attestation
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh attestation verify "build-context/pi-assets-${{ steps.pin.outputs.pi_assets_version }}.tar.gz" --repo "${{ env.PI_CUSTOMIZATIONS_REPO }}"
+
+      - name: Derive pi-customizations revision from the archive manifest
+        id: manifest
+        run: |
+          version="${{ steps.pin.outputs.pi_assets_version }}"
+          revision="$(tar -xOzf "build-context/pi-assets-${version}.tar.gz" manifest.json | node -e 'process.stdout.write(JSON.parse(require("fs").readFileSync(0,"utf8")).source.revision)')"
+          printf 'revision=%s\n' "$revision" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Pi image
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: build-context
+          push: true
+          sbom: true
+          provenance: true
+          tags: ${{ steps.pin.outputs.image }}:${{ needs.build-base.outputs.version }}
+          build-args: |
+            BASE_IMAGE=${{ needs.build-base.outputs.image }}@${{ needs.build-base.outputs.digest }}
+            OPENSHELL_ENVIRONMENTS_VERSION=${{ needs.build-base.outputs.version }}
+            OPENSHELL_ENVIRONMENTS_REVISION=${{ github.sha }}
+            PI_CUSTOMIZATIONS_REVISION=${{ steps.manifest.outputs.revision }}
+            PI_ASSETS_VERSION=${{ steps.pin.outputs.pi_assets_version }}
+
+  sign:
+    needs: [build-base, build-pi]
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+      id-token: write
+    steps:
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: sigstore/cosign-installer@v3
+
+      - name: Sign base image
+        run: cosign sign --yes "${{ needs.build-base.outputs.image }}@${{ needs.build-base.outputs.digest }}"
+
+      - name: Sign Pi image
+        run: cosign sign --yes "${{ needs.build-pi.outputs.image }}@${{ needs.build-pi.outputs.digest }}"
+
+  verify-clean-pull:
+    # No checkout step anywhere in this job: it proves the images are
+    # launchable on a machine with neither source repository present.
+    needs: [build-base, build-pi, sign]
+    runs-on: ubuntu-latest
+    permissions:
+      packages: read
+    steps:
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull images by digest only
+        run: |
+          docker pull "${{ needs.build-base.outputs.image }}@${{ needs.build-base.outputs.digest }}"
+          docker pull "${{ needs.build-pi.outputs.image }}@${{ needs.build-pi.outputs.digest }}"
+
+      - name: Verify Pi image resource layout
+        run: |
+          docker run --rm --entrypoint sh "${{ needs.build-pi.outputs.image }}@${{ needs.build-pi.outputs.digest }}" -c '
+            set -e
+            [ "$(ls /opt/pi-customizations)" = "manifest.json" ]
+            [ -f /home/pi/.pi/agent/APPEND_SYSTEM.md ]
+            for d in agents extensions skills themes; do [ -d "/home/pi/.pi/agent/$d" ]; done
+            [ ! -f /home/pi/.pi/agent/settings.json ]
+            pi --version
+          '
+
+      - name: Verify restricted-PATH Rust toolchain
+        run: |
+          docker run --rm \
+            -e PATH=/usr/local/bin:/usr/bin:/bin \
+            -e RUSTUP_HOME= \
+            -e CARGO_HOME= \
+            "${{ needs.build-pi.outputs.image }}@${{ needs.build-pi.outputs.digest }}" /bin/sh -ec '
+              test "$RUSTUP_HOME" = /usr/local/rustup
+              test "$CARGO_HOME" = /tmp/cargo
+              cargo --version
+              rustc --version
+              cargo fmt --version
+              cargo clippy --version
+            '
+
+  release-notes:
+    needs: [build-base, build-pi, sign, verify-clean-pull]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Publish release notes
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          body: |
+            Published images (linux/amd64 only; not tested or claimed on other architectures):
+
+            - `${{ needs.build-base.outputs.image }}:${{ needs.build-base.outputs.version }}` @ `${{ needs.build-base.outputs.digest }}`
+            - `${{ needs.build-pi.outputs.image }}:${{ needs.build-base.outputs.version }}` @ `${{ needs.build-pi.outputs.digest }}`
+
+            Pi assets: `pi-customizations` release `pi-assets-v${{ needs.build-pi.outputs.pi-assets-version }}`.
+
+            Both images are pushed with a BuildKit SBOM and provenance attestation, and are signed keylessly with cosign (verifiable via Sigstore/Rekor).
