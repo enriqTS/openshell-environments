@@ -156,7 +156,9 @@ This work is complete when a clean computer can install and run customized Pi wi
 
 ## Status
 
-Phase 6 complete. `ghcr.io/enriqts/openshell-environments/{base,pi}:0.2.0`, `pi-assets-v0.1.0`, and `pi-openshell-v0.1.0` are all published, signed/attested, and independently verified — including a full clean-machine acceptance run (23/23 checks) against real, live infrastructure. The 0.1.0 whole-tree image build remains the rollback baseline, reachable at git tag `v0.1.0`; this machine's real `~/.local/bin/pi` has not yet been switched over (a separate decision, asked after this run).
+Phase 6 complete, then superseded within the same session by a real bug found in production use — see "Post-acceptance fix" below. Current published state: `ghcr.io/enriqts/openshell-environments/{base,pi}:0.3.0`, `pi-assets-v0.1.0`, and `pi-openshell-v0.2.0`. `0.2.0`/`pi-openshell-v0.1.0` (below) and `0.1.0` (the whole-tree image build, git tag `v0.1.0`) remain available as rollback points. This machine's real `~/.local/bin/pi` is switched over and running the fixed release.
+
+`ghcr.io/enriqts/openshell-environments/{base,pi}:0.2.0`, `pi-assets-v0.1.0`, and `pi-openshell-v0.1.0` were published, signed/attested, and independently verified — including a full clean-machine acceptance run (23/23 checks) against real, live infrastructure — before the npm/uv bug below was found.
 
 Completed (Phase 1-2, contracts and exporter):
 
@@ -200,9 +202,15 @@ Completed (Phase 6, clean-machine acceptance):
 - Per the user's choice, everything ran inside the throwaway container; this machine's real `~/.local/bin/pi` was verified untouched (still the working 0.1.0 adapter) before and after every run.
 - Not attempted: a second, VM-based environment (available if the user wants extra rigor later); `linux/arm64` (still unbuilt/untested).
 
-This machine's real `~/.local/bin/pi` now points at the published `pi-openshell` `0.1.0` install (`~/.local/share/pi-openshell/0.1.0/bin/pi`), switched over by request after acceptance passed. The prior `openshell-environments` `0.1.0` source-based install remains on disk at `~/.local/share/openshell-environments/0.1.0` as a one-command rollback (`install-pi-openshell` preserves prior versions; the old `~/Projetos/pi-customizations/bin/pi-openshell` adapter also still works standalone). A real `pi --version` through the new symlink completed a full provider/session sync round trip cleanly with no leftover sandbox and no changes to any host git checkout.
+This machine's real `~/.local/bin/pi` pointed at the published `pi-openshell` `0.1.0` install, switched over by request after acceptance passed. A real `pi --version` through that symlink completed a full provider/session sync round trip cleanly with no leftover sandbox and no changes to any host git checkout.
 
-**`PLAN.md`'s objective is met**: a clean computer can install and run customized Pi without either source repository, without machine-specific paths, and with the prior security, provider, session, Git, recovery, and customization behavior preserved — demonstrated with real published artifacts, independently verified, and now running as this machine's actual daily-use `pi`.
+**`PLAN.md`'s objective is met**: a clean computer can install and run customized Pi without either source repository, without machine-specific paths, and with the prior security, provider, session, Git, recovery, and customization behavior preserved — demonstrated with real published artifacts, independently verified, and running as this machine's actual daily-use `pi`.
+
+### Post-acceptance fix: `0.3.0` / `pi-openshell-v0.2.0`
+
+Immediately after switching over, real use surfaced a bug clean-machine acceptance hadn't covered: **npm was not accessible from inside a real sandbox**. Root cause, confirmed by reproducing it directly: OpenShell can omit image `ENV` at exec time — already known and handled for `RUSTUP_HOME`/`CARGO_HOME` — but `npm_config_cache`/`UV_CACHE_DIR`/`COREPACK_HOME` were never added to the same toolchain-entrypoint restoration, so npm/uv fell back to their default caches under `$HOME`, which is read-only outside `/home/pi/.pi/agent`. A `--version` check alone can't catch this (it doesn't write anything); only an operation that actually writes to the cache does. A second, related bug was found while reproducing it: the root-run `npm install -g` build step baked a root-owned cache into the image, which then conflicted with the runtime `pi` user even after the env-var fix.
+
+Both fixed in `clients/pi/Dockerfile`; `verify_pi_toolchain` (renamed from `verify_pi_rust`) and CI's `verify-clean-pull` job both now exercise a real `npm install` and `uv --version` under the restricted env, not just a version check, so this class of bug is caught automatically going forward. Went through the full release cycle again for the fix: `v0.3.0` published and independently verified (pulled, `cosign verify`'d, and a real `npm install` re-confirmed on the actual published image, not just the local build) at `ghcr.io/enriqts/openshell-environments/pi:0.3.0@sha256:80c8ec093a8322f0dea53e763a409edeb119873bb23ff39001cff2ca21fa9cd7`; `pi-customizations` re-pinned to it and published `pi-openshell-v0.2.0`; `bin/clean-machine-acceptance` re-run against the new chain end-to-end (24/24, including the new npm check) in an isolated container before touching anything real; then the real `~/.local/bin/pi` was upgraded (`install-pi-openshell upgrade 0.2.0`) and the fix independently re-confirmed against a real sandbox created through this machine's actual gateway — not just the isolated test container.
 
 Remaining, explicitly out of scope for now: a second, VM-based clean-machine environment for extra rigor; `linux/arm64` support.
 
