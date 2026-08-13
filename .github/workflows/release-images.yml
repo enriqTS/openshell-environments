@@ -177,12 +177,15 @@ jobs:
             pi --version
           '
 
-      - name: Verify restricted-PATH Rust toolchain
+      - name: Verify restricted-PATH toolchain (Rust, npm, uv)
         run: |
           docker run --rm \
             -e PATH=/usr/local/bin:/usr/bin:/bin \
             -e RUSTUP_HOME= \
             -e CARGO_HOME= \
+            -e npm_config_cache= \
+            -e UV_CACHE_DIR= \
+            -e COREPACK_HOME= \
             "${{ needs.build-pi.outputs.image }}@${{ needs.build-pi.outputs.digest }}" /bin/sh -ec '
               test "$RUSTUP_HOME" = /usr/local/rustup
               test "$CARGO_HOME" = /tmp/cargo
@@ -190,6 +193,11 @@ jobs:
               rustc --version
               cargo fmt --version
               cargo clippy --version
+              mkdir -p /tmp/verify-npm && cd /tmp/verify-npm
+              npm init -y >/dev/null
+              npm install --no-audit --no-fund lodash >/dev/null
+              test -d node_modules/lodash
+              uv --version
             '
 
   release-notes:
