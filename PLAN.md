@@ -25,10 +25,10 @@ Make `pi-customizations` completely unaware of OpenShell. The only dependency mu
 
 ### Phase 1 — Freeze and map the current contract
 
-- [ ] Record the current published rollback chain (`pi-assets-v0.1.0`, environment `0.3.0`, and `pi-openshell-v0.2.0`) and do not move or delete those releases/tags.
+- [x] Record the current published rollback chain (`pi-assets-v0.1.0`, environment `0.3.0`, and `pi-openshell-v0.2.0`) and do not move or delete those releases/tags.
 - [x] Inventory every OpenShell-specific source, test, workflow, pin, and document in `pi-customizations`; the move/removal checklist is committed as `docs/pi-customizations-isolation-handoff.md` for the follow-up sandbox.
-- [ ] Define the new generic Pi asset manifest. It may contain only Pi resources and generic metadata; specifically exclude `pi-openshell-entrypoint`, `patch-pi-codex`, host integration, credentials, settings, and sessions.
-- [ ] Decide the new ownership/versioning of the host integration package under this repository without changing API 1 unless the archive schema itself must change.
+- [x] Define the new generic Pi asset manifest. It contains only Pi resources with `target: "agent"` and generic metadata; image/host helpers, credentials, settings, and sessions are rejected.
+- [x] Move host integration package ownership to this repository while retaining launcher/hook API 1. Environment and host-package releases currently share `0.4.0`; Pi assets retain their independent `0.2.0` line.
 
 ### Phase 2 — Move image and runtime behavior here first
 
@@ -40,14 +40,14 @@ Make `pi-customizations` completely unaware of OpenShell. The only dependency mu
 ### Phase 3 — Move all Pi host/client integration here
 
 - [x] Move the packaged Pi launcher, workspace hook, settings sanitizer, session translator, provider helper/profile, and installer into `clients/pi/` or `bin/`.
-- [ ] Make exact `pi update` call the already-local `bin/update-openshell-client`; keep forms such as `pi update --models` inside the sandbox.
+- [x] Make exact `pi update` call the already-local `bin/update-openshell-client`; keep forms such as `pi update --models` inside the sandbox.
 - [x] Preserve XDG installation, atomic launcher/image selection, current-project-only sessions, settings allowlisting, recovery, provider isolation, and raw-secret exclusion.
 - [ ] Move all corresponding unit/integration tests before removing their originals.
 
 ### Phase 4 — Move release production and installation here
 
 - [x] Produce the Pi host integration package from this repository, using this repository's compatibility contracts and environment/image release metadata (workflow added; publication awaits the new generic asset/image release).
-- [ ] Move the `pi-openshell` release workflow, environment pinning, checksum/provenance validation, and installer lifecycle tests here.
+- [ ] Move the `pi-openshell` release workflow, environment pinning, checksum/provenance validation, and installer lifecycle tests here. Workflow and pinning are moved; installer lifecycle coverage remains to be ported.
 - [ ] Ensure the host package contains no path or runtime dependency on a `pi-customizations` checkout; its only customization dependency is the asset identity already embedded in the selected image.
 - [ ] Provide an atomic migration from an installed package published by `pi-customizations` to the new package without overwriting unrelated commands or deleting retained sandboxes.
 

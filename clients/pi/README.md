@@ -1,9 +1,15 @@
 # Pi client
 
-The image consumes only the sanitized `pi-assets` artifact that `pi-customizations`' exporter produces, defined in [`../../docs/pi-release-contracts.md`](../../docs/pi-release-contracts.md), via `bin/openshell-image`. Resources install into Pi's standard `/home/pi/.pi/agent` paths, which Pi auto-discovers without settings registration; `/opt/pi-customizations` retains only the asset manifest for audit, not the checkout. Pi-owned settings/session/provider behavior stays in `pi-customizations`. This directory owns only the client image composition and minimum sandbox policy.
+The image consumes only the generic, published `pi-assets` archive produced by `pi-customizations`, as defined in [`../../docs/pi-release-contracts.md`](../../docs/pi-release-contracts.md). The archive contains Pi resources only; this repository owns all OpenShell-specific image and host behavior.
 
-Compatibility: image/client API `pi-customizations-api-1`; `openshell-environments` 0.3.0 pairs with `pi-customizations` launcher API 1 and Pi asset API 1.
+Resources install into Pi's standard `/home/pi/.pi/agent` paths, which Pi auto-discovers without settings registration. `/opt/pi-assets` retains only the generic asset manifest for audit. The image entrypoint and Codex opaque-account-ID patch are reviewed local files in this directory, not asset archive members.
 
-`bin/openshell-image` can source `pi-customizations` from a local checkout (`--pi-source PATH`, an explicit development override), a pinned tag/branch/SHA fetched directly from `github.com/enriqTS/pi-customizations` (`--pi-ref REF`, also a development override), or an already-published, checksum-verified `pi-assets` release (`--pi-assets-version VERSION`) — the last is what both local release builds and CI use, and never clones `pi-customizations` or runs its scripts. The prior whole-tree build remains available for rollback at git tag `v0.1.0`.
+Build from the independently versioned asset release pinned in `pi-assets.version`:
 
-`.github/workflows/release-images.yml` publishes `ghcr.io/enriqts/openshell-environments/pi:<version>` (and `base`) on a version tag, digest-pinned, SBOM/provenance-attested, and cosign-signed. The separately installed host integration package, published by `pi-customizations` and installed via `pi-customizations/bin/install-pi-openshell`, binds to this image by digest through `compatibility.json` (Phase 5 of `../../PLAN.md`); see the root [`README.md`](../../README.md#pi-integration) for the install command.
+```bash
+bin/openshell-image build pi --pi-assets-version "$(<clients/pi/pi-assets.version)"
+```
+
+The build downloads and checksum-verifies the published archive; it never clones `pi-customizations` or invokes its exporter. `.github/workflows/release-images.yml` additionally verifies the producer's provenance attestation and publishes the signed, attested `ghcr.io/enriqts/openshell-environments/pi:<environment-version>` image.
+
+The host launcher, synchronization hook, settings/session translators, provider integration, installer, exporter, and release workflow are under `clients/pi/host/`, `bin/`, and `.github/workflows/release-pi-openshell.yml` in this repository.

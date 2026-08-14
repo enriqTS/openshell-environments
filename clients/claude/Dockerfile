@@ -1,4 +1,4 @@
-ARG BASE_IMAGE=localhost/openshell-environments/base:0.3.0
+ARG BASE_IMAGE=localhost/openshell-environments/base:0.4.0
 FROM ${BASE_IMAGE}
 
 # Claude Code's postinstall downloads/activates its platform-native binary;

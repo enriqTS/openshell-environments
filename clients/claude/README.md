@@ -11,7 +11,7 @@ bin/openshell-image build base
 bin/openshell-image build claude
 ```
 
-The resulting local image is `localhost/openshell-environments/claude:0.3.0`. Override it at launch with `CLAUDE_OPENSHELL_IMAGE=<full-versioned-reference>` when needed.
+The resulting local image is `localhost/openshell-environments/claude:0.4.0`. Override it at launch with `CLAUDE_OPENSHELL_IMAGE=<full-versioned-reference>` when needed.
 
 ## Run
 

@@ -6,8 +6,8 @@ set -Eeuo pipefail
 # no source checkouts, sharing only this host's Docker socket and existing
 # OpenShell gateway trust (both explicitly out of this project's scope).
 
-PI_VERSION="${1:-0.2.0}"
-ENVIRONMENT_VERSION="${2:-0.3.0}"
+PI_VERSION="${1:-0.4.0}"
+ENVIRONMENT_VERSION="${2:-0.4.0}"
 CONTAINER_NAME="openshell-clean-machine-acceptance"
 PROBE_SANDBOX="acceptance-probe"
 BASE_IMAGE="debian:trixie-slim"

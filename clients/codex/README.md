@@ -9,7 +9,7 @@ bin/openshell-image build base
 bin/openshell-image build codex
 ```
 
-The resulting local image is `localhost/openshell-environments/codex:0.3.0`. Provider authentication requires the current image's `codex-openshell-entrypoint`; the launcher checks its compatibility label and asks for a rebuild instead of failing later inside a sandbox. Override the image at launch with `CODEX_OPENSHELL_IMAGE=<full-versioned-reference>` when needed.
+The resulting local image is `localhost/openshell-environments/codex:0.4.0`. Provider authentication requires the current image's `codex-openshell-entrypoint`; the launcher checks its compatibility label and asks for a rebuild instead of failing later inside a sandbox. Override the image at launch with `CODEX_OPENSHELL_IMAGE=<full-versioned-reference>` when needed.
 
 ## Run
 
