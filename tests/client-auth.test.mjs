@@ -18,7 +18,7 @@ async function fakeEnvironment() {
   const log = join(temp, "openshell.log");
   await mkdir(fakeBin);
   const openshell = join(fakeBin, "openshell");
-  await writeFile(openshell, `#!/usr/bin/env bash\nset -euo pipefail\nprintf '%s\\n' "$*" >>"$FAKE_LOG"\nif [[ "$1 $2 $3" == "provider profile export" ]]; then [[ "\${FAKE_PROFILE_EXISTS:-}" == 1 ]] && exit 0 || exit 1; fi\nif [[ "$1 $2" == "provider delete" ]]; then touch "$FAKE_PROVIDER_DELETED"; exit 0; fi\nif [[ "$1 $2" == "provider get" ]]; then\n  [[ "\${FAKE_PROVIDER_EXISTS:-}" == 1 && ! -e "$FAKE_PROVIDER_DELETED" ]] && exit 0 || exit 1\nfi\nexit 0\n`);
+  await writeFile(openshell, `#!/usr/bin/env bash\nset -euo pipefail\nprintf '%s\\n' "$*" >>"$FAKE_LOG"\nif [[ "$1 $2 $3" == "provider profile export" ]]; then\n  [[ "\${FAKE_PROFILE_EXISTS:-}" == 1 ]] || exit 1\n  printf 'id: claude-openshell-oauth\\nresource_version: 7\\n'\n  exit 0\nfi\nif [[ "$1 $2 $3" == "provider profile update" ]]; then grep '^resource_version:' "$6" >>"$FAKE_LOG"; exit 0; fi\nif [[ "$1 $2" == "provider delete" ]]; then touch "$FAKE_PROVIDER_DELETED"; exit 0; fi\nif [[ "$1 $2" == "provider get" ]]; then\n  [[ "\${FAKE_PROVIDER_EXISTS:-}" == 1 && ! -e "$FAKE_PROVIDER_DELETED" ]] && exit 0 || exit 1\nfi\nexit 0\n`);
   await chmod(openshell, 0o755);
   return {
     temp,
@@ -48,8 +48,9 @@ test("Claude auth setup can replace a provider created with the wrong token", as
     env: { ...fixture.env, FAKE_PROFILE_EXISTS: "1", FAKE_PROVIDER_EXISTS: "1", CLAUDE_CODE_OAUTH_TOKEN: "replacement-token" },
   });
   const calls = await readFile(fixture.log, "utf8");
-  assert.match(calls, /provider profile update claude-openshell-oauth .*clients\/claude\/provider.yaml/);
+  assert.match(calls, /provider profile update claude-openshell-oauth -f \/tmp\/[^\s]+\/update.yaml/);
   assert.doesNotMatch(calls, /provider profile lint/);
+  assert.match(calls, /^resource_version: 7$/m);
   assert.match(calls, /provider delete claude-openshell/);
   assert.match(calls, /provider create --name claude-openshell --type claude-openshell-oauth/);
   assert.doesNotMatch(calls, /provider update claude-openshell/);

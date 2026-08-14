@@ -13,17 +13,25 @@ require_openshell() {
   command -v openshell >/dev/null 2>&1 || { printf 'setup-openshell-client-auth: openshell CLI is not on PATH\n' >&2; exit 127; }
 }
 
-install_profile() {
-  local id="$1" file="$2"
-  if openshell provider profile export "$id" -o yaml >/dev/null 2>&1; then
-    # `profile lint` rejects a valid replacement file when its custom ID is
-    # already registered. `profile update` performs the required validation.
-    openshell provider profile update "$id" -f "$file" >/dev/null
+install_profile() (
+  local id="$1" file="$2" temp_dir exported update_file resource_version
+  temp_dir="$(mktemp -d)"
+  trap 'rm -rf -- "$temp_dir"' EXIT
+  exported="$temp_dir/exported.yaml"
+  update_file="$temp_dir/update.yaml"
+  if openshell provider profile export "$id" -o yaml >"$exported" 2>/dev/null; then
+    # Updates use optimistic concurrency. Preserve the current gateway-owned
+    # resource_version while replacing the reviewed profile body.
+    resource_version="$(awk '$1 == "resource_version:" && $2 ~ /^[1-9][0-9]*$/ { print $2; exit }' "$exported")"
+    [[ -n "$resource_version" ]] || { printf 'setup-openshell-client-auth: exported profile %s has no non-zero resource_version\n' "$id" >&2; exit 1; }
+    grep -v '^resource_version:' "$file" >"$update_file"
+    printf 'resource_version: %s\n' "$resource_version" >>"$update_file"
+    openshell provider profile update "$id" -f "$update_file" >/dev/null
   else
     openshell provider profile lint -f "$file" >/dev/null
     openshell provider profile import -f "$file" >/dev/null
   fi
-}
+)
 
 replace_provider_if_requested() {
   local provider="$1"

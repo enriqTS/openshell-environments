@@ -18,6 +18,7 @@ Make the host `claude` and `codex` terminal commands automatically launch their 
 - [x] Restored `clients/claude/provider.yaml` after an accidental local truncation and added `--replace` to delete/recreate a provider configured with the wrong token.
 - [x] Diagnosed the missing Codex entrypoint as a stale pre-provider image; added a provider-auth compatibility label and launcher preflight so this fails early with the exact rebuild command.
 - [x] Fixed replacement of an already-imported custom profile: OpenShell's standalone `profile lint` rejects duplicate registered IDs, so existing profiles now go directly through validating `profile update`; lint remains before first import.
+- [x] Fixed the next existing-profile requirement: export the registered custom profile, preserve its non-zero optimistic-concurrency `resource_version`, merge that version into the reviewed replacement body, then update.
 - [ ] Validate profile import, gateway refresh/substitution, rebuilt Codex image, and real Claude/Codex requests on the user's host (this coding sandbox has no Docker/OpenShell CLI).
 - [x] Added a build-time `claude --version` smoke test, ran all 32 repository tests, and reviewed the Claude native-binary fix; ready to commit.
 - [x] Fixed the first real Claude launch failure: generated names could reach 20 characters while OpenShell accepts at most 19. The shared launcher now dynamically truncates only the project component while preserving the client prefix and full PID suffix.
