@@ -1,7 +1,8 @@
 ARG BASE_IMAGE=localhost/openshell-environments/base:0.3.0
 FROM ${BASE_IMAGE}
 
-RUN npm install -g --ignore-scripts @earendil-works/pi-coding-agent \
+ARG PI_CLI_VERSION=latest
+RUN npm install -g --ignore-scripts "@earendil-works/pi-coding-agent@$PI_CLI_VERSION" \
   && useradd --create-home --shell /bin/bash pi \
   # This install runs as root and writes root-owned caches (npm_config_cache
   # etc. are already set by the base image); the runtime user is "pi", so a
@@ -57,6 +58,7 @@ LABEL org.opencontainers.image.title="Pi client for OpenShell" \
       org.opencontainers.image.version="$OPENSHELL_ENVIRONMENTS_VERSION" \
       org.opencontainers.image.revision="$OPENSHELL_ENVIRONMENTS_REVISION" \
       io.openshell.client="pi" \
+      io.openshell.cli.version="$PI_CLI_VERSION" \
       io.openshell.pi-customizations.revision="$PI_CUSTOMIZATIONS_REVISION" \
       io.openshell.pi-assets.version="$PI_ASSETS_VERSION" \
       io.openshell.pi-assets.api="1" \

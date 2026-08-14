@@ -1,0 +1,102 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+SCRIPT_PATH="$(readlink -f -- "${BASH_SOURCE[0]}")"
+ROOT="$(cd -- "$(dirname -- "$SCRIPT_PATH")/.." && pwd -P)"
+client="${1:-}"
+[[ -n "$client" ]] && shift || true
+
+expected_launcher=""
+case "${1:-}" in
+  --launcher)
+    expected_launcher="${2:-}"
+    [[ -n "$expected_launcher" ]] || { printf 'update-openshell-client: --launcher requires a path\n' >&2; exit 2; }
+    shift 2
+    ;;
+esac
+(($# == 0)) || { printf 'usage: update-openshell-client {pi|claude|codex} [--launcher PATH]\n' >&2; exit 2; }
+case "$client" in pi|claude|codex) ;; *) printf 'usage: update-openshell-client {pi|claude|codex} [--launcher PATH]\n' >&2; exit 2 ;; esac
+
+BIN_DIR="${OPENSHELL_CLIENT_BIN_DIR:-${XDG_BIN_HOME:-$HOME/.local/bin}}"
+target="$BIN_DIR/$client"
+[[ -L "$target" ]] || { printf 'update-openshell-client: refusing to update without an OpenShell launcher symlink: %s\n' "$target" >&2; exit 1; }
+launcher="$(readlink -f -- "$target")"
+if [[ -n "$expected_launcher" && "$launcher" != "$(readlink -f -- "$expected_launcher")" ]]; then
+  printf 'update-openshell-client: refusing to replace launcher %s (expected %s)\n' "$launcher" "$expected_launcher" >&2
+  exit 1
+fi
+launcher_link="$(readlink -- "$target")"
+restore_needed=0
+
+restore_launcher() {
+  ((restore_needed == 1)) || return 0
+  local replacement="$BIN_DIR/.${client}.openshell.$$"
+  rm -rf -- "$target" "$replacement"
+  ln -s -- "$launcher_link" "$replacement"
+  mv -Tf -- "$replacement" "$target"
+  restore_needed=0
+}
+trap restore_launcher EXIT HUP INT TERM
+
+# Leave the vendor's normal command location available to its installer. The
+# exact OpenShell link is restored atomically both here and from the EXIT trap.
+rm -- "$target"
+restore_needed=1
+export OPENSHELL_UPDATE_TARGET="$target"
+
+case "$client" in
+  pi)
+    "${CURL:-curl}" -fsSL "${PI_INSTALLER_URL:-https://pi.dev/install.sh}" | sh
+    ;;
+  claude)
+    "${CURL:-curl}" -fsSL "${CLAUDE_INSTALLER_URL:-https://claude.ai/install.sh}" | bash
+    ;;
+  codex)
+    "${NPM:-npm}" i -g "${CODEX_NPM_PACKAGE:-@openai/codex}"
+    ;;
+esac
+
+vendor_binary=""
+if [[ -x "$target" ]]; then
+  vendor_binary="$(readlink -f -- "$target")"
+elif [[ "$client" == codex ]]; then
+  npm_prefix="$("${NPM:-npm}" prefix -g)"
+  [[ -x "$npm_prefix/bin/codex" ]] && vendor_binary="$(readlink -f -- "$npm_prefix/bin/codex")"
+fi
+[[ -n "$vendor_binary" && "$vendor_binary" != "$launcher" ]] || {
+  printf 'update-openshell-client: vendor installer did not produce a new %s executable\n' "$client" >&2
+  exit 1
+}
+version_output="$("$vendor_binary" --version 2>&1)"
+cli_version="$(printf '%s\n' "$version_output" | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?' | head -n 1 || true)"
+[[ -n "$cli_version" ]] || {
+  printf 'update-openshell-client: could not resolve %s version from: %s\n' "$client" "$version_output" >&2
+  exit 1
+}
+
+restore_launcher
+trap - EXIT HUP INT TERM
+
+image_tool="${OPENSHELL_IMAGE_TOOL:-$ROOT/bin/openshell-image}"
+if [[ "$client" == pi ]]; then
+  pi_assets_version="$(<"$ROOT/clients/pi/pi-assets.version")"
+  "$image_tool" build pi --pi-assets-version "$pi_assets_version" --cli-version "$cli_version"
+else
+  "$image_tool" build "$client" --cli-version "$cli_version"
+fi
+image_ref="$("$image_tool" refs | awk -F= -v client="$client" '$1 == client { print $2; exit }')"
+[[ "$image_ref" =~ ^[^[:space:]]+/[^[:space:]]+:[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]] || {
+  printf 'update-openshell-client: image tool returned an invalid %s reference: %s\n' "$client" "$image_ref" >&2
+  exit 1
+}
+config_dir="${XDG_CONFIG_HOME:-$HOME/.config}/openshell-clients"
+mkdir -p -- "$config_dir"
+config_tmp="$config_dir/.${client}.image.$$"
+printf '%s\n' "$image_ref" >"$config_tmp"
+mv -f -- "$config_tmp" "$config_dir/$client.image"
+
+[[ -L "$target" && "$(readlink -f -- "$target")" == "$launcher" ]] || {
+  printf 'update-openshell-client: OpenShell launcher restoration failed: %s\n' "$target" >&2
+  exit 1
+}
+printf 'updated %s to %s and rebuilt its OpenShell image\n' "$client" "$cli_version"

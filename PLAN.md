@@ -2,9 +2,17 @@
 
 ## Active objective
 
-Make the host `claude` and `codex` terminal commands automatically launch their corresponding OpenShell workspace sandboxes, matching Pi's command-driven workflow. Add thin client launchers, local image lifecycle support, command installation/alias guidance, and regression tests without adding credential or state synchronization.
+Add host-side vendor CLI updates that run each vendor's official installer, resolve the installed version, rebuild the corresponding local OpenShell image with that exact version, and always restore the OpenShell command symlink if the installer replaces it.
 
 ### Active approach / progress
+
+- [x] Added a transactional shared updater for Pi, Claude, and Codex with fail-safe, atomic launcher restoration around the official vendor installers.
+- [x] Pinned image installation to the host-resolved vendor CLI version, verified the built image reports it, and recorded it in image metadata.
+- [x] Intercepted exact update commands in repository-owned launchers; `pi-customizations` now delegates exact `pi update` to the shared updater while preserving other update forms for the sandbox.
+- [x] Persisted the successfully rebuilt full local image reference under XDG config so the next launch selects it; explicit environment overrides remain higher priority.
+- [x] Added regression tests and usage/security documentation. All 47 tests pass; Docker image builds were not run because this sandbox has no Docker CLI.
+
+### Prior launcher work
 
 - [x] Fixed launcher argument-forwarding assertions by placing `--tty` after explicit exec environment flags; this preserves OpenShell option semantics and provides a delimiter-safe option between `HOME` and the command separator.
 - [x] Ran all 40 tests and reviewed the launcher regression fix; ready to commit.

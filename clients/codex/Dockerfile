@@ -1,7 +1,8 @@
 ARG BASE_IMAGE=localhost/openshell-environments/base:0.3.0
 FROM ${BASE_IMAGE}
 
-RUN npm install -g --ignore-scripts @openai/codex \
+ARG CODEX_CLI_VERSION=latest
+RUN npm install -g --ignore-scripts "@openai/codex@$CODEX_CLI_VERSION" \
   && useradd --create-home --shell /bin/bash codex \
   && mkdir -p /workspace \
   && chown codex:codex /workspace \
@@ -23,4 +24,5 @@ LABEL org.opencontainers.image.title="Codex client for OpenShell" \
       org.opencontainers.image.version="$OPENSHELL_ENVIRONMENTS_VERSION" \
       org.opencontainers.image.revision="$OPENSHELL_ENVIRONMENTS_REVISION" \
       io.openshell.client="codex" \
-      io.openshell.client-auth="provider-v2"
+      io.openshell.client-auth="provider-v2" \
+      io.openshell.cli.version="$CODEX_CLI_VERSION"

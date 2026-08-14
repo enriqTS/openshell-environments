@@ -4,9 +4,16 @@ set -Eeuo pipefail
 SCRIPT_PATH="$(readlink -f -- "${BASH_SOURCE[0]}")"
 ROOT="$(cd -- "$(dirname -- "$SCRIPT_PATH")/.." && pwd -P)"
 VERSION="$(<"$ROOT/VERSION")"
-IMAGE="${CLAUDE_OPENSHELL_IMAGE:-localhost/openshell-environments/claude:$VERSION}"
+IMAGE="${CLAUDE_OPENSHELL_IMAGE:-}"
+IMAGE_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/openshell-clients/claude.image"
+if [[ -z "$IMAGE" && -f "$IMAGE_FILE" ]]; then IFS= read -r IMAGE <"$IMAGE_FILE" || true; fi
+IMAGE="${IMAGE:-localhost/openshell-environments/claude:$VERSION}"
 PROVIDER="${CLAUDE_OPENSHELL_PROVIDER:-}"
 PROVIDER_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/openshell-clients/claude.provider"
+if [[ "${1:-}" == update ]]; then
+  (($# == 1)) || { printf 'usage: claude update\n' >&2; exit 2; }
+  exec "$ROOT/bin/update-openshell-client" claude --launcher "$SCRIPT_PATH"
+fi
 if [[ -z "$PROVIDER" && -f "$PROVIDER_FILE" ]]; then IFS= read -r PROVIDER <"$PROVIDER_FILE" || true; fi
 workspace_args=()
 case "${1:-}" in

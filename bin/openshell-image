@@ -30,6 +30,14 @@ require_clean() {
   }
 }
 
+require_cli_version() {
+  local version="$1"
+  [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]] || {
+    printf 'openshell-image: invalid resolved CLI version: %s\n' "$version" >&2
+    exit 2
+  }
+}
+
 verify_pi_toolchain() {
   # Run through the image entrypoint under the same restricted PATH and
   # omitted ENV that OpenShell gives Pi. A successful build alone cannot
@@ -83,8 +91,23 @@ fetch_pi_assets_release() {
   (cd "$dest" && sha256sum -c --ignore-missing SHA256SUMS)
 }
 
+verify_resolved_version() {
+  local client="$1" expected="$2" output="$3"
+  printf '%s\n' "$output"
+  [[ "$expected" == latest || "$output" == *"$expected"* ]] || {
+    printf 'openshell-image: %s image reports %s, expected %s\n' "$client" "$output" "$expected" >&2
+    exit 1
+  }
+}
+
 build_client() {
-  local client="$1" image="$2"
+  local client="$1" image="$2" cli_version="${3:-latest}" cli_version_arg version_output
+  [[ "$cli_version" == latest ]] || require_cli_version "$cli_version"
+  case "$client" in
+    claude) cli_version_arg=CLAUDE_CLI_VERSION ;;
+    codex) cli_version_arg=CODEX_CLI_VERSION ;;
+    *) printf 'openshell-image: unsupported client: %s\n' "$client" >&2; exit 2 ;;
+  esac
   require_docker
   require_clean "$ROOT"
   docker image inspect "$BASE_IMAGE" >/dev/null 2>&1 || {
@@ -95,12 +118,14 @@ build_client() {
     --build-arg "BASE_IMAGE=$BASE_IMAGE" \
     --build-arg "OPENSHELL_ENVIRONMENTS_VERSION=$VERSION" \
     --build-arg "OPENSHELL_ENVIRONMENTS_REVISION=$(revision "$ROOT")" \
+    --build-arg "$cli_version_arg=$cli_version" \
     -t "$image" "$ROOT/clients/$client"
   if [[ "$client" == codex ]]; then
-    docker run --rm -e HOME=/home/codex "$image" codex-openshell-entrypoint --version
+    version_output="$(docker run --rm -e HOME=/home/codex "$image" codex-openshell-entrypoint --version)"
   else
-    docker run --rm -e HOME="/home/$client" "$image" "$client" --version
+    version_output="$(docker run --rm -e HOME="/home/$client" "$image" "$client" --version)"
   fi
+  verify_resolved_version "$client" "$cli_version" "$version_output"
 }
 
 build_pi() {
@@ -108,7 +133,9 @@ build_pi() {
   local pi_source="${1:-${PI_CUSTOMIZATIONS_DIR:-}}"
   local pi_ref="${2:-${PI_CUSTOMIZATIONS_REF:-}}"
   local pi_assets_version="${3:-${PI_CUSTOMIZATIONS_ASSETS_VERSION:-}}"
-  local fetched="" context=""
+  local cli_version="${4:-latest}"
+  [[ "$cli_version" == latest ]] || require_cli_version "$cli_version"
+  local fetched="" context="" version_output
   trap 'rm -rf -- "${context:-}" "${fetched:-}"' RETURN
   local sources_given=0
   [[ -n "$pi_source" ]] && sources_given=$((sources_given + 1))
@@ -160,7 +187,10 @@ build_pi() {
     --build-arg "OPENSHELL_ENVIRONMENTS_REVISION=$(revision "$ROOT")" \
     --build-arg "PI_CUSTOMIZATIONS_REVISION=$pi_customizations_revision" \
     --build-arg "PI_ASSETS_VERSION=$pi_assets_label_version" \
+    --build-arg "PI_CLI_VERSION=$cli_version" \
     -t "$PI_IMAGE" "$context"
+  version_output="$(docker run --rm -e HOME=/home/pi "$PI_IMAGE" pi --version)"
+  verify_resolved_version pi "$cli_version" "$version_output"
   verify_pi_toolchain
 }
 
@@ -171,21 +201,31 @@ case "$command" in
     shift 2 || true
     case "$target" in
       base) build_base ;;
-      claude) build_client claude "$CLAUDE_IMAGE" ;;
-      codex) build_client codex "$CODEX_IMAGE" ;;
+      claude|codex)
+        cli_version=latest
+        while (($#)); do
+          case "$1" in
+            --cli-version) cli_version="${2:-}"; shift 2 ;;
+            *) printf 'openshell-image: unknown argument: %s\n' "$1" >&2; exit 2 ;;
+          esac
+        done
+        [[ "$target" == claude ]] && build_client claude "$CLAUDE_IMAGE" "$cli_version" || build_client codex "$CODEX_IMAGE" "$cli_version"
+        ;;
       pi)
         pi_source=""
         pi_ref=""
         pi_assets_version=""
+        cli_version=latest
         while (($#)); do
           case "$1" in
             --pi-source) pi_source="${2:-}"; shift 2 ;;
             --pi-ref) pi_ref="${2:-}"; shift 2 ;;
             --pi-assets-version) pi_assets_version="${2:-}"; shift 2 ;;
+            --cli-version) cli_version="${2:-}"; shift 2 ;;
             *) printf 'openshell-image: unknown argument: %s\n' "$1" >&2; exit 2 ;;
           esac
         done
-        build_pi "$pi_source" "$pi_ref" "$pi_assets_version"
+        build_pi "$pi_source" "$pi_ref" "$pi_assets_version" "$cli_version"
         ;;
       all)
         pi_source=""
@@ -202,7 +242,7 @@ case "$command" in
         build_base
         build_pi "$pi_source" "$pi_ref" "$pi_assets_version"
         ;;
-      *) printf 'usage: openshell-image build {base|claude|codex|pi|all} {--pi-source PATH|--pi-ref REF|--pi-assets-version VERSION}\n' >&2; exit 2 ;;
+      *) printf 'usage: openshell-image build {base|claude|codex|pi|all} [--cli-version VERSION] {--pi-source PATH|--pi-ref REF|--pi-assets-version VERSION}\n' >&2; exit 2 ;;
     esac
     ;;
   inspect)
@@ -225,7 +265,7 @@ case "$command" in
     printf 'base=%s\nclaude=%s\ncodex=%s\npi=%s\n' "$BASE_IMAGE" "$CLAUDE_IMAGE" "$CODEX_IMAGE" "$PI_IMAGE"
     ;;
   *)
-    printf 'usage: openshell-image {build {base|claude|codex|pi|all}|inspect [base|claude|codex|pi]|cleanup|refs}\n' >&2
+    printf 'usage: openshell-image {build {base|claude|codex|pi|all} [--cli-version VERSION]|inspect [base|claude|codex|pi]|cleanup|refs}\n' >&2
     exit 2
     ;;
 esac

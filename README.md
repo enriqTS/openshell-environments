@@ -53,6 +53,16 @@ bin/install-openshell-client-launchers install
 
 `${XDG_BIN_HOME:-$HOME/.local/bin}` must precede any native Claude/Codex installation on `PATH`. The installer refuses to replace an existing path in that directory. Use `bin/install-openshell-client-launchers uninstall` to remove only symlinks owned by this checkout.
 
+Update a vendor CLI and rebuild its local image with the normal command:
+
+```bash
+pi update
+claude update
+codex update
+```
+
+Exact update commands run on the host, not in a sandbox. The shared updater temporarily removes the verified OpenShell command symlink, runs the vendor's official installer (`pi.dev/install.sh`, `claude.ai/install.sh`, or global `@openai/codex`), reads the installed version, atomically restores the same launcher even on failure, and builds the image with that exact version. Other Pi forms such as `pi update --models` continue into the sandbox. The compatible Pi launcher in `pi-customizations` owns the `pi update` delegation.
+
 These launchers reuse Pi's workspace/Git lifecycle and can retain authentication through gateway providers even though every successful sandbox is deleted. Configure them once after logging in with the preserved direct CLIs:
 
 ```bash

@@ -3,7 +3,8 @@ FROM ${BASE_IMAGE}
 
 # Claude Code's postinstall downloads/activates its platform-native binary;
 # --ignore-scripts leaves a JS shim that fails immediately at runtime.
-RUN npm install -g @anthropic-ai/claude-code \
+ARG CLAUDE_CLI_VERSION=latest
+RUN npm install -g "@anthropic-ai/claude-code@$CLAUDE_CLI_VERSION" \
   && claude --version \
   && useradd --create-home --shell /bin/bash claude \
   && mkdir -p /workspace \
@@ -23,4 +24,5 @@ ARG OPENSHELL_ENVIRONMENTS_REVISION=unknown
 LABEL org.opencontainers.image.title="Claude Code client for OpenShell" \
       org.opencontainers.image.version="$OPENSHELL_ENVIRONMENTS_VERSION" \
       org.opencontainers.image.revision="$OPENSHELL_ENVIRONMENTS_REVISION" \
-      io.openshell.client="claude"
+      io.openshell.client="claude" \
+      io.openshell.cli.version="$CLAUDE_CLI_VERSION"
