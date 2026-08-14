@@ -30,7 +30,7 @@
           "path": { "$ref": "#/$defs/safePath" },
           "sha256": { "$ref": "#/$defs/sha256" },
           "mode": { "enum": ["0644", "0755"] },
-          "target": { "enum": ["agent", "image"] }
+          "target": { "enum": ["agent"] }
         }
       }
     }
@@ -40,16 +40,14 @@
     { "properties": { "files": { "contains": { "properties": { "path": { "pattern": "^agents/" } }, "required": ["path"] } } } },
     { "properties": { "files": { "contains": { "properties": { "path": { "pattern": "^extensions/" } }, "required": ["path"] } } } },
     { "properties": { "files": { "contains": { "properties": { "path": { "pattern": "^skills/" } }, "required": ["path"] } } } },
-    { "properties": { "files": { "contains": { "properties": { "path": { "pattern": "^themes/" } }, "required": ["path"] } } } },
-    { "properties": { "files": { "contains": { "properties": { "path": { "const": "image/pi-openshell-entrypoint" } }, "required": ["path"] } } } },
-    { "properties": { "files": { "contains": { "properties": { "path": { "const": "image/patch-pi-codex" } }, "required": ["path"] } } } }
+    { "properties": { "files": { "contains": { "properties": { "path": { "pattern": "^themes/" } }, "required": ["path"] } } } }
   ],
   "$defs": {
     "revision": { "type": "string", "pattern": "^[0-9a-f]{40,64}$" },
     "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
     "safePath": {
       "type": "string",
-      "pattern": "^(APPEND_SYSTEM\\.md|agents/[^/].*|extensions/[^/].*|skills/[^/].*|themes/[^/].*|image/(pi-openshell-entrypoint|patch-pi-codex))$"
+      "pattern": "^(APPEND_SYSTEM\\.md|agents/[^/].*|extensions/[^/].*|skills/[^/].*|themes/[^/].*)$"
     }
   }
 }

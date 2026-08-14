@@ -83,7 +83,7 @@ jobs:
       - name: Download and verify pinned pi-assets release
         run: |
           mkdir -p build-context
-          cp clients/pi/Dockerfile build-context/Dockerfile
+          cp clients/pi/Dockerfile clients/pi/pi-openshell-entrypoint clients/pi/patch-pi-codex build-context/
           version="${{ steps.pin.outputs.pi_assets_version }}"
           base_url="https://github.com/${PI_CUSTOMIZATIONS_REPO}/releases/download/pi-assets-v${version}"
           curl -fsSL -o "build-context/pi-assets-${version}.tar.gz" "$base_url/pi-assets-${version}.tar.gz"
@@ -123,7 +123,7 @@ jobs:
             BASE_IMAGE=${{ needs.build-base.outputs.image }}@${{ needs.build-base.outputs.digest }}
             OPENSHELL_ENVIRONMENTS_VERSION=${{ needs.build-base.outputs.version }}
             OPENSHELL_ENVIRONMENTS_REVISION=${{ github.sha }}
-            PI_CUSTOMIZATIONS_REVISION=${{ steps.manifest.outputs.revision }}
+            PI_ASSETS_REVISION=${{ steps.manifest.outputs.revision }}
             PI_ASSETS_VERSION=${{ steps.pin.outputs.pi_assets_version }}
 
   sign:
@@ -170,7 +170,7 @@ jobs:
         run: |
           docker run --rm --entrypoint sh "${{ needs.build-pi.outputs.image }}@${{ needs.build-pi.outputs.digest }}" -c '
             set -e
-            [ "$(ls /opt/pi-customizations)" = "manifest.json" ]
+            [ "$(ls /opt/pi-assets)" = "manifest.json" ]
             [ -f /home/pi/.pi/agent/APPEND_SYSTEM.md ]
             for d in agents extensions skills themes; do [ -d "/home/pi/.pi/agent/$d" ]; done
             [ ! -f /home/pi/.pi/agent/settings.json ]

@@ -10,6 +10,7 @@ RUN npm install -g --ignore-scripts "@earendil-works/pi-coding-agent@$PI_CLI_VER
   && rm -rf /tmp/npm-cache /tmp/uv-cache /tmp/corepack /root/.npm /root/.cache
 
 COPY pi-assets-*.tar.gz /tmp/pi-assets.tar.gz
+COPY pi-openshell-entrypoint patch-pi-codex /build/
 # OpenShell supplies Pi a restricted PATH when executing the entrypoint and can
 # omit image ENV entirely. Restore the base toolchain environment before Pi
 # starts so its child shell commands inherit it: without this, npm/uv/corepack
@@ -29,16 +30,16 @@ RUN printf '%s\n' '#!/bin/sh' \
 # Install only the reviewed, allowlisted assets from the sanitized archive
 # into Pi's standard resource paths, which Pi auto-discovers without settings
 # registration. Keep just the manifest (not the checkout) for audit.
-RUN mkdir -p /tmp/pi-assets /opt/pi-customizations /home/pi/.pi/agent \
+RUN mkdir -p /tmp/pi-assets /opt/pi-assets /home/pi/.pi/agent \
   && tar -xzf /tmp/pi-assets.tar.gz -C /tmp/pi-assets \
-  && cp /tmp/pi-assets/manifest.json /opt/pi-customizations/manifest.json \
+  && cp /tmp/pi-assets/manifest.json /opt/pi-assets/manifest.json \
   && cp /tmp/pi-assets/APPEND_SYSTEM.md /home/pi/.pi/agent/APPEND_SYSTEM.md \
   && cp -a /tmp/pi-assets/agents /home/pi/.pi/agent/agents \
   && cp -a /tmp/pi-assets/extensions /home/pi/.pi/agent/extensions \
   && cp -a /tmp/pi-assets/skills /home/pi/.pi/agent/skills \
   && cp -a /tmp/pi-assets/themes /home/pi/.pi/agent/themes \
-  && install -m 0755 /tmp/pi-assets/image/pi-openshell-entrypoint /usr/local/bin/pi-openshell-entrypoint \
-  && node /tmp/pi-assets/image/patch-pi-codex \
+  && install -m 0755 /build/pi-openshell-entrypoint /usr/local/bin/pi-openshell-entrypoint \
+  && node /build/patch-pi-codex \
   && rm -rf /tmp/pi-assets /tmp/pi-assets.tar.gz \
   && chown -R pi:pi /home/pi/.pi \
   && mkdir -p /workspace \
@@ -52,14 +53,14 @@ ENTRYPOINT ["/usr/local/bin/pi-openshell-toolchain-entrypoint"]
 
 ARG OPENSHELL_ENVIRONMENTS_VERSION=dev
 ARG OPENSHELL_ENVIRONMENTS_REVISION=unknown
-ARG PI_CUSTOMIZATIONS_REVISION=unknown
+ARG PI_ASSETS_REVISION=unknown
 ARG PI_ASSETS_VERSION=dev
 LABEL org.opencontainers.image.title="Pi client for OpenShell" \
       org.opencontainers.image.version="$OPENSHELL_ENVIRONMENTS_VERSION" \
       org.opencontainers.image.revision="$OPENSHELL_ENVIRONMENTS_REVISION" \
       io.openshell.client="pi" \
       io.openshell.cli.version="$PI_CLI_VERSION" \
-      io.openshell.pi-customizations.revision="$PI_CUSTOMIZATIONS_REVISION" \
+      io.openshell.pi-assets.source.revision="$PI_ASSETS_REVISION" \
       io.openshell.pi-assets.version="$PI_ASSETS_VERSION" \
       io.openshell.pi-assets.api="1" \
-      io.openshell.compatibility="pi-customizations-api-1"
+      io.openshell.compatibility="pi-assets-api-1"

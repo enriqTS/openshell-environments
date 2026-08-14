@@ -23,8 +23,6 @@ const asset = () => ({
     { path: "extensions/tools.mjs", sha256: checksum, mode: "0644", target: "agent" },
     { path: "skills/release/SKILL.md", sha256: checksum, mode: "0644", target: "agent" },
     { path: "themes/dark.json", sha256: checksum, mode: "0644", target: "agent" },
-    { path: "image/pi-openshell-entrypoint", sha256: checksum, mode: "0755", target: "image" },
-    { path: "image/patch-pi-codex", sha256: checksum, mode: "0755", target: "image" },
   ],
 });
 
@@ -34,7 +32,7 @@ const host = () => ({
   version: "1.2.3",
   launcherApi: 1,
   hookApi: 1,
-  source: { repository: "https://github.com/enriqTS/pi-customizations", revision },
+  source: { repository: "https://github.com/enriqTS/openshell-environments", revision },
   files: [
     { path: "bin/pi-openshell", sha256: checksum, mode: "0755" },
     { path: "bin/pi", sha256: checksum, mode: "0755" },
@@ -118,7 +116,7 @@ test("release metadata rejects missing checksums, revisions, and incompatible AP
   rejected((x) => { x.piAssets.api = 2; }, validateReleaseMetadata, release(), /piAssets.api is incompatible/);
 });
 
-test("the actual published 0.2.0 / pi-assets-v0.1.0 release compatibility metadata validates", () => {
+test("the preserved published rollback compatibility metadata validates", () => {
   // Real values recorded from the published releases (Phase 4/5), not
   // fixtures: a regression check that this repo's contracts and
   // pi-customizations' compatibility.json assembly stay mutually valid.

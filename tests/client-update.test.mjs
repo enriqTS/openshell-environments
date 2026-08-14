@@ -59,7 +59,7 @@ for (const client of ["pi", "claude", "codex"]) {
     assert.equal(await readlink(f.target), f.launcher);
     const build = await readFile(f.imageLog, "utf8");
     assert.match(build, new RegExp(`build ${client} .*--cli-version 9\\.8\\.7`));
-    if (client === "pi") assert.match(build, /--pi-assets-version 0\.1\.0/);
+    if (client === "pi") assert.match(build, /--pi-assets-version 0\.2\.0/);
     assert.equal(await readFile(join(f.temp, "config", "openshell-clients", `${client}.image`), "utf8"), `localhost/openshell-environments/${client}:0.3.0\n`);
   });
 }

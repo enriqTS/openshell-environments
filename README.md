@@ -4,41 +4,21 @@ Reusable, client-isolated OpenShell development environments. This repository ow
 
 ## Pi integration
 
-Compatibility: `pi-customizations` API 1 pairs with `openshell-environments` **0.3.0**. The Pi image now builds from `pi-customizations`' sanitized `pi-assets` archive (see [`pi-release-contracts.md`](docs/pi-release-contracts.md)) instead of a whole checked-out tree, and installs resources into Pi's standard `/home/pi/.pi/agent` paths. The prior whole-tree build is preserved for rollback at git tag `v0.1.0`, which still produces `localhost/openshell-environments/pi:0.1.0`.
+Pi OpenShell integration is owned here. `pi-customizations` is only the producer of a generic, published `pi-assets` resource archive; this repository downloads and checksum-verifies it, while image helpers, session/settings synchronization, provider routing, launchers, installer, and package release stay here.
 
-Commit both source trees, then build deliberately tagged local images (the build command rejects dirty repositories so image labels and contents identify an exact revision). Source `pi-customizations` from a local checkout, directly from GitHub, or from its published release (pick exactly one):
-
-```bash
-bin/openshell-image build all --pi-source /path/to/pi-customizations
-# or, with no local checkout at all:
-bin/openshell-image build all --pi-ref main               # any tag, branch, or commit SHA
-bin/openshell-image build all --pi-assets-version 0.1.0    # a published pi-assets release
-bin/openshell-image refs
-bin/openshell-image inspect pi
-```
-
-`--pi-ref` shallow-fetches the exact revision from `https://github.com/enriqTS/pi-customizations` into a throwaway directory before exporting; it never uses `main` implicitly unless you ask for it. `--pi-assets-version` instead downloads and checksum-verifies an already-built `pi-assets-<version>.tar.gz` GitHub Release published by `pi-customizations`' own CI — no clone, no running its scripts. Exactly one of the three may be given. `.github/workflows/release-images.yml` uses `--pi-assets-version` (via `clients/pi/pi-assets.version`) to build and publish `ghcr.io/enriqts/openshell-environments/{base,pi}:<version>` on a `v<semver>` tag; see [`pi-release-contracts.md`](docs/pi-release-contracts.md#image-publishing).
-
-The resulting client reference is `localhost/openshell-environments/pi:0.3.0`. Launchers never build implicitly. To remove this version's images:
+Build explicitly from the pinned generic release (no checkout or exporter from `pi-customizations` is used):
 
 ```bash
-bin/openshell-image cleanup
+bin/openshell-image build all --pi-assets-version "$(<clients/pi/pi-assets.version)"
 ```
 
-For normal use (no local checkout of either repository), install the published host integration package from `pi-customizations`:
+After the next environment-owned host-package release, install it with:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/enriqTS/pi-customizations/main/bin/install-pi-openshell | bash -s -- install <version>
+curl -fsSL https://raw.githubusercontent.com/enriqTS/openshell-environments/main/bin/install-pi-openshell | bash -s -- install <version>
 ```
 
-This downloads and checksum-verifies a `pi-openshell-v<version>` release, installs it atomically under `${XDG_DATA_HOME:-$HOME/.local/share}/pi-openshell/<version>/`, fetches the compatible `openshell-environments` release it depends on, and symlinks `${XDG_BIN_HOME:-$HOME/.local/bin}/pi`. See [`pi-release-contracts.md`](docs/pi-release-contracts.md#host-integration-package) for the full mechanics, and `install-pi-openshell {upgrade|downgrade|uninstall|list}` for managing installed versions.
-
-The Pi adapter is also installed and invoked from `pi-customizations` for local development. For an explicit development checkout override:
-
-```bash
-export PI_OPENSHELL_ENVIRONMENTS_DIR=/path/to/openshell-environments
-/path/to/pi-customizations/bin/pi-openshell
-```
+The installer activates `pi` atomically under XDG directories. Exact `pi update` runs the host updater; `pi update --models` runs inside the sandbox. Existing `pi-openshell-v0.2.0` remains the rollback chain during migration.
 
 ## Claude Code and Codex integration
 
@@ -87,7 +67,7 @@ The gateway injects only opaque credential handles. Codex materializes an epheme
 
 ```bash
 npm test
-bin/openshell-image build all --pi-source /path/to/pi-customizations
+bin/openshell-image build all --pi-assets-version "$(<clients/pi/pi-assets.version)"
 ```
 
 See [`docs/security-model.md`](docs/security-model.md) before adding permissions, [`docs/gateway.md`](docs/gateway.md) for local operation, and [`docs/pi-release-contracts.md`](docs/pi-release-contracts.md) for the portable distribution boundary. The contracts are defined now; no portable release is published yet.

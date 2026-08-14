@@ -16,7 +16,7 @@
       "additionalProperties": false,
       "required": ["repository", "revision"],
       "properties": {
-        "repository": { "const": "https://github.com/enriqTS/pi-customizations" },
+        "repository": { "const": "https://github.com/enriqTS/openshell-environments" },
         "revision": { "$ref": "#/$defs/revision" }
       }
     },

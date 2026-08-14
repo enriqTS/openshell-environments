@@ -1,0 +1,67 @@
+name: Release Pi OpenShell host package
+
+on:
+  push:
+    tags: ["pi-openshell-v*"]
+
+permissions:
+  contents: write
+  packages: read
+  id-token: write
+  attestations: write
+
+env:
+  ASSET_REPOSITORY: enriqTS/pi-customizations
+  IMAGE_BASE: ghcr.io/enriqts/openshell-environments
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "lts/*" }
+      - name: Derive and validate release version
+        id: version
+        run: |
+          version="${GITHUB_REF_NAME#pi-openshell-v}"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]
+          printf 'value=%s\n' "$version" >> "$GITHUB_OUTPUT"
+      - run: npm test
+      - name: Download and verify generic assets
+        id: assets
+        run: |
+          version="$(cat clients/pi/pi-assets.version)"
+          base="https://github.com/$ASSET_REPOSITORY/releases/download/pi-assets-v$version"
+          mkdir -p dist/assets
+          curl -fsSL -o "dist/assets/pi-assets-$version.tar.gz" "$base/pi-assets-$version.tar.gz"
+          curl -fsSL -o dist/assets/SHA256SUMS "$base/SHA256SUMS"
+          (cd dist/assets && sha256sum -c --ignore-missing SHA256SUMS)
+          tar -xOzf "dist/assets/pi-assets-$version.tar.gz" manifest.json > dist/assets/manifest.json
+          printf 'archive=%s\nchecksum=%s\n' "dist/assets/pi-assets-$version.tar.gz" "$(sha256sum "dist/assets/pi-assets-$version.tar.gz" | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+      - name: Resolve the matching published image
+        id: image
+        env: { VERSION: "${{ steps.version.outputs.value }}" }
+        run: |
+          ref="$IMAGE_BASE/pi:$VERSION"
+          docker pull "$ref"
+          printf 'reference=%s\ndigest=%s\nrevision=%s\n' "$ref" "$(docker image inspect "$ref" --format '{{index .RepoDigests 0}}' | cut -d@ -f2)" "$(docker image inspect "$ref" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}')" >> "$GITHUB_OUTPUT"
+      - name: Assemble compatibility metadata
+        env:
+          HOST_VERSION: "${{ steps.version.outputs.value }}"
+          IMAGE_REFERENCE: "${{ steps.image.outputs.reference }}"
+          IMAGE_DIGEST: "${{ steps.image.outputs.digest }}"
+          IMAGE_REVISION: "${{ steps.image.outputs.revision }}"
+          ASSET_CHECKSUM: "${{ steps.assets.outputs.checksum }}"
+        run: |
+          node -e '
+          const fs=require("fs"), m=JSON.parse(fs.readFileSync("dist/assets/manifest.json"));
+          fs.writeFileSync("dist/compatibility.json", JSON.stringify({schemaVersion:1,environment:{version:process.env.HOST_VERSION,revision:process.env.IMAGE_REVISION},image:{reference:process.env.IMAGE_REFERENCE,digest:process.env.IMAGE_DIGEST,platforms:["linux/amd64"]},hostIntegration:{version:process.env.HOST_VERSION,launcherApi:1,hookApi:1},piAssets:{version:m.version,api:m.piAssetsApi,sourceRevision:m.source.revision,sha256:process.env.ASSET_CHECKSUM}},null,2)+"\n")'
+      - run: node bin/export-pi-host-package.mjs host --version "${{ steps.version.outputs.value }}" --output dist --compatibility dist/compatibility.json --asset-archive "${{ steps.assets.outputs.archive }}"
+      - uses: actions/attest-build-provenance@v1
+        with: { subject-path: "dist/pi-openshell-*.tar.gz" }
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/pi-openshell-*.tar.gz
+            dist/SHA256SUMS

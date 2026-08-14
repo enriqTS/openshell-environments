@@ -24,7 +24,7 @@ test("interactive-login clients keep general HTTPS opaque instead of interceptin
 
 test("client-only filesystem permissions are not in the shared base", () => {
   assert.doesNotMatch(base, /pi-customizations|\/home\/(pi|claude|codex)/);
-  assert.match(pi, /\/opt\/pi-customizations/);
+  assert.match(pi, /\/opt\/pi-assets/);
   assert.match(pi, /\/home\/pi\/\.pi\/agent/);
   assert.match(claude, /\/home\/claude/);
   assert.doesNotMatch(claude, /\/home\/(pi|codex)/);

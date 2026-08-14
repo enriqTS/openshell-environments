@@ -9,7 +9,6 @@ BASE_IMAGE="${OPENSHELL_BASE_IMAGE:-$REGISTRY/base:$VERSION}"
 PI_IMAGE="${PI_OPENSHELL_IMAGE:-$REGISTRY/pi:$VERSION}"
 CLAUDE_IMAGE="${CLAUDE_OPENSHELL_IMAGE:-$REGISTRY/claude:$VERSION}"
 CODEX_IMAGE="${CODEX_OPENSHELL_IMAGE:-$REGISTRY/codex:$VERSION}"
-CANONICAL_PI_CUSTOMIZATIONS_URL="https://github.com/enriqTS/pi-customizations.git"
 
 revision() {
   git -C "$1" rev-parse HEAD 2>/dev/null || printf unknown
@@ -75,14 +74,6 @@ build_base() {
     -t "$BASE_IMAGE" "$ROOT/base"
 }
 
-fetch_pi_ref() {
-  local ref="$1" dest="$2"
-  git init -q "$dest"
-  git -C "$dest" remote add origin "$CANONICAL_PI_CUSTOMIZATIONS_URL"
-  git -C "$dest" fetch --depth 1 origin "$ref"
-  git -C "$dest" checkout -q FETCH_HEAD
-}
-
 fetch_pi_assets_release() {
   local version="$1" dest="$2"
   local base="https://github.com/enriqTS/pi-customizations/releases/download/pi-assets-v${version}"
@@ -130,70 +121,35 @@ build_client() {
 
 build_pi() {
   require_docker
-  local pi_source="${1:-${PI_CUSTOMIZATIONS_DIR:-}}"
-  local pi_ref="${2:-${PI_CUSTOMIZATIONS_REF:-}}"
-  local pi_assets_version="${3:-${PI_CUSTOMIZATIONS_ASSETS_VERSION:-}}"
-  local cli_version="${4:-latest}"
+  local pi_assets_version="${1:-${PI_CUSTOMIZATIONS_ASSETS_VERSION:-}}"
+  local cli_version="${2:-latest}"
   [[ "$cli_version" == latest ]] || require_cli_version "$cli_version"
-  local fetched="" context="" version_output
-  trap 'rm -rf -- "${context:-}" "${fetched:-}"' RETURN
-  local sources_given=0
-  [[ -n "$pi_source" ]] && sources_given=$((sources_given + 1))
-  [[ -n "$pi_ref" ]] && sources_given=$((sources_given + 1))
-  [[ -n "$pi_assets_version" ]] && sources_given=$((sources_given + 1))
-  if ((sources_given > 1)); then
-    printf 'openshell-image: specify only one of --pi-source, --pi-ref, or --pi-assets-version\n' >&2
-    exit 2
-  fi
-  if [[ -n "$pi_ref" ]]; then
-    fetched="$(mktemp -d)"
-    fetch_pi_ref "$pi_ref" "$fetched"
-    pi_source="$fetched"
-  fi
-  if [[ -z "$pi_source" && -z "$pi_assets_version" ]]; then
-    printf 'usage: openshell-image build pi {--pi-source /path/to/pi-customizations | --pi-ref REF | --pi-assets-version VERSION}\n' >&2
-    exit 2
-  fi
-  if [[ -n "$pi_source" && ! -d "$pi_source/.git" ]]; then
-    printf 'usage: openshell-image build pi {--pi-source /path/to/pi-customizations | --pi-ref REF | --pi-assets-version VERSION}\n' >&2
-    exit 2
-  fi
+  [[ -n "$pi_assets_version" ]] || { printf 'usage: openshell-image build pi --pi-assets-version VERSION\n' >&2; exit 2; }
   require_clean "$ROOT"
   docker image inspect "$BASE_IMAGE" >/dev/null 2>&1 || {
     printf 'openshell-image: base image is absent; run: %q build base\n' "$0" >&2
     exit 1
   }
-  context="$(mktemp -d)"
-  cp "$ROOT/clients/pi/Dockerfile" "$context/Dockerfile"
-  local pi_customizations_revision pi_assets_label_version
-  if [[ -n "$pi_assets_version" ]]; then
-    # Consume an already-built, already-checksummed release published by
-    # pi-customizations; never clone its source or run its scripts here.
-    fetch_pi_assets_release "$pi_assets_version" "$context"
-    pi_customizations_revision="$(tar -xOzf "$context/pi-assets-${pi_assets_version}.tar.gz" manifest.json | node -e 'process.stdout.write(JSON.parse(require("fs").readFileSync(0,"utf8")).source.revision)')"
-    pi_assets_label_version="$pi_assets_version"
-  else
-    pi_source="$(cd -- "$pi_source" && pwd -P)"
-    require_clean "$pi_source"
-    # Export only the sanitized, allowlisted asset archive; never bake the
-    # checkout, its VCS metadata, or unrelated files into the build context.
-    node "$pi_source/bin/export-pi-release.mjs" assets --version "$VERSION" --output "$context"
-    pi_customizations_revision="$(revision "$pi_source")"
-    pi_assets_label_version="$VERSION"
-  fi
+  local context="$(mktemp -d)" pi_assets_revision
+  trap 'rm -rf -- "$context"' RETURN
+  cp "$ROOT/clients/pi/Dockerfile" "$ROOT/clients/pi/pi-openshell-entrypoint" "$ROOT/clients/pi/patch-pi-codex" "$context/"
+  # Release builds consume the generic, checksummed asset archive only. Never
+  # clone pi-customizations or execute its scripts in this repository.
+  fetch_pi_assets_release "$pi_assets_version" "$context"
+  pi_assets_revision="$(tar -xOzf "$context/pi-assets-${pi_assets_version}.tar.gz" manifest.json | node -e 'process.stdout.write(JSON.parse(require("fs").readFileSync(0,"utf8")).source.revision)')"
   docker buildx build --load \
     --build-arg "BASE_IMAGE=$BASE_IMAGE" \
     --build-arg "OPENSHELL_ENVIRONMENTS_VERSION=$VERSION" \
     --build-arg "OPENSHELL_ENVIRONMENTS_REVISION=$(revision "$ROOT")" \
-    --build-arg "PI_CUSTOMIZATIONS_REVISION=$pi_customizations_revision" \
-    --build-arg "PI_ASSETS_VERSION=$pi_assets_label_version" \
+    --build-arg "PI_ASSETS_REVISION=$pi_assets_revision" \
+    --build-arg "PI_ASSETS_VERSION=$pi_assets_version" \
     --build-arg "PI_CLI_VERSION=$cli_version" \
     -t "$PI_IMAGE" "$context"
+  local version_output
   version_output="$(docker run --rm -e HOME=/home/pi "$PI_IMAGE" pi --version)"
   verify_resolved_version pi "$cli_version" "$version_output"
   verify_pi_toolchain
 }
-
 command="${1:-}"
 case "$command" in
   build)
@@ -212,37 +168,29 @@ case "$command" in
         [[ "$target" == claude ]] && build_client claude "$CLAUDE_IMAGE" "$cli_version" || build_client codex "$CODEX_IMAGE" "$cli_version"
         ;;
       pi)
-        pi_source=""
-        pi_ref=""
         pi_assets_version=""
         cli_version=latest
         while (($#)); do
           case "$1" in
-            --pi-source) pi_source="${2:-}"; shift 2 ;;
-            --pi-ref) pi_ref="${2:-}"; shift 2 ;;
             --pi-assets-version) pi_assets_version="${2:-}"; shift 2 ;;
             --cli-version) cli_version="${2:-}"; shift 2 ;;
             *) printf 'openshell-image: unknown argument: %s\n' "$1" >&2; exit 2 ;;
           esac
         done
-        build_pi "$pi_source" "$pi_ref" "$pi_assets_version" "$cli_version"
+        build_pi "$pi_assets_version" "$cli_version"
         ;;
       all)
-        pi_source=""
-        pi_ref=""
         pi_assets_version=""
         while (($#)); do
           case "$1" in
-            --pi-source) pi_source="${2:-}"; shift 2 ;;
-            --pi-ref) pi_ref="${2:-}"; shift 2 ;;
             --pi-assets-version) pi_assets_version="${2:-}"; shift 2 ;;
             *) printf 'openshell-image: unknown argument: %s\n' "$1" >&2; exit 2 ;;
           esac
         done
         build_base
-        build_pi "$pi_source" "$pi_ref" "$pi_assets_version"
+        build_pi "$pi_assets_version"
         ;;
-      *) printf 'usage: openshell-image build {base|claude|codex|pi|all} [--cli-version VERSION] {--pi-source PATH|--pi-ref REF|--pi-assets-version VERSION}\n' >&2; exit 2 ;;
+      *) printf 'usage: openshell-image build {base|claude|codex|pi|all} [--cli-version VERSION] --pi-assets-version VERSION\n' >&2; exit 2 ;;
     esac
     ;;
   inspect)

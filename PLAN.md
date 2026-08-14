@@ -32,21 +32,21 @@ Make `pi-customizations` completely unaware of OpenShell. The only dependency mu
 
 ### Phase 2 — Move image and runtime behavior here first
 
-- [ ] Copy `pi-openshell-entrypoint` and `patch-pi-codex` into `clients/pi/` and make the Pi Docker build use these local reviewed files rather than receiving them in `pi-assets`.
-- [ ] Update contracts/tests so a generic asset archive containing image or host helpers is rejected.
+- [x] Copy `pi-openshell-entrypoint` and `patch-pi-codex` into `clients/pi/` and make the Pi Docker build use these local reviewed files rather than receiving them in `pi-assets`.
+- [x] Update contracts/tests so a generic asset archive containing image or host helpers is rejected.
 - [ ] Consume a new generic `pi-assets` release and verify resource discovery, Codex routing, Terraform guard behavior, and restricted-PATH toolchain behavior.
 - [ ] Keep temporary compatibility with the old asset archive only on the rollback release line; do not maintain dual ownership on the new line.
 
 ### Phase 3 — Move all Pi host/client integration here
 
-- [ ] Move the development and packaged Pi launchers, workspace hook, settings sanitizer, session translator, provider helper/profile, and installer into `clients/pi/`, `bin/`, or `lib/` as appropriate.
+- [x] Move the packaged Pi launcher, workspace hook, settings sanitizer, session translator, provider helper/profile, and installer into `clients/pi/` or `bin/`.
 - [ ] Make exact `pi update` call the already-local `bin/update-openshell-client`; keep forms such as `pi update --models` inside the sandbox.
-- [ ] Preserve XDG installation, atomic launcher/image selection, current-project-only sessions, settings allowlisting, recovery, provider isolation, and raw-secret exclusion.
+- [x] Preserve XDG installation, atomic launcher/image selection, current-project-only sessions, settings allowlisting, recovery, provider isolation, and raw-secret exclusion.
 - [ ] Move all corresponding unit/integration tests before removing their originals.
 
 ### Phase 4 — Move release production and installation here
 
-- [ ] Produce and publish the Pi host integration package from this repository, using this repository's compatibility contracts and environment/image release metadata.
+- [x] Produce the Pi host integration package from this repository, using this repository's compatibility contracts and environment/image release metadata (workflow added; publication awaits the new generic asset/image release).
 - [ ] Move the `pi-openshell` release workflow, environment pinning, checksum/provenance validation, and installer lifecycle tests here.
 - [ ] Ensure the host package contains no path or runtime dependency on a `pi-customizations` checkout; its only customization dependency is the asset identity already embedded in the selected image.
 - [ ] Provide an atomic migration from an installed package published by `pi-customizations` to the new package without overwriting unrelated commands or deleting retained sandboxes.
