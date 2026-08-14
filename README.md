@@ -40,12 +40,27 @@ export PI_OPENSHELL_ENVIRONMENTS_DIR=/path/to/openshell-environments
 /path/to/pi-customizations/bin/pi-openshell
 ```
 
+## Claude Code and Codex integration
+
+Claude Code and Codex have lightweight, local-only OpenShell clients. Build them explicitly, then install command symlinks so typing `claude` or `codex` launches the matching sandbox automatically:
+
+```bash
+bin/openshell-image build base
+bin/openshell-image build claude
+bin/openshell-image build codex
+bin/install-openshell-client-launchers install
+```
+
+`${XDG_BIN_HOME:-$HOME/.local/bin}` must precede any native Claude/Codex installation on `PATH`. The installer refuses to replace an existing path in that directory. Use `bin/install-openshell-client-launchers uninstall` to remove only symlinks owned by this checkout.
+
+These launchers reuse Pi's workspace/Git lifecycle but intentionally do not copy Pi's provider hooks or state synchronization. Their sandboxes are deleted after each successful run, so authenticate interactively each time; the lightweight launchers deliberately do not copy raw host API keys into the sandbox. Images are never built or pulled during launch. See [`clients/claude/README.md`](clients/claude/README.md) and [`clients/codex/README.md`](clients/codex/README.md).
+
 ## Layout
 
 - `base/Dockerfile` — shared development toolchain.
 - `bin/openshell-workspace` — snapshot upload/download, Git safeguards, recovery, and client hooks.
 - `bin/openshell-image` — explicit build, inspect, reference, and cleanup commands.
-- `clients/pi/` — Pi image layer and minimum policy.
+- `clients/{pi,claude,codex}/` — isolated client image layers and minimum policies.
 - `contracts/` — machine-readable Pi asset, host package, and release metadata contracts.
 - `lib/pi-release-contract.mjs` — fail-closed contract validation shared with tests and future release tooling.
 - `policies/base.yaml` — default shared filesystem and public HTTP/HTTPS policy.

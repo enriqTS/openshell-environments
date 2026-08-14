@@ -1,6 +1,20 @@
 # Plan
 
-## Objective
+## Active objective
+
+Make the host `claude` and `codex` terminal commands automatically launch their corresponding OpenShell workspace sandboxes, matching Pi's command-driven workflow. Add thin client launchers, local image lifecycle support, command installation/alias guidance, and regression tests without adding credential or state synchronization.
+
+### Active approach / progress
+
+- [x] Confirmed `bin/openshell-workspace` already owns the required upload, sandbox, execution, download, and cleanup lifecycle.
+- [x] Reviewed the in-progress untracked `clients/claude/` and `clients/codex/` image/policy definitions; preserve them and integrate them rather than replacing them.
+- [x] Added and tested thin Claude/Codex launchers with explicit client `HOME`, versioned local image defaults, image overrides, argument forwarding, and retained-sandbox recovery options.
+- [x] Added local build/inspect/ref/cleanup support for both client images.
+- [x] Added a collision-safe XDG command installer and documented exposing the launchers as `claude` and `codex`.
+- [x] Added policy, image, lifecycle, recovery, installer, and argument-forwarding regression coverage; all 31 tests pass. Docker image builds could not be exercised in this coding sandbox because the Docker CLI is unavailable.
+- [x] Reviewed the final diff and reconciled durable documentation; ready to commit.
+
+## Original portability objective (completed)
 
 Make OpenShell client environments portable across computers without requiring identical checkout paths or source repositories during normal use.
 

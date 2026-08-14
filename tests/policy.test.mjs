@@ -4,8 +4,10 @@ import test from "node:test";
 
 const base = await readFile(new URL("../policies/base.yaml", import.meta.url), "utf8");
 const pi = await readFile(new URL("../clients/pi/policy.yaml", import.meta.url), "utf8");
+const claude = await readFile(new URL("../clients/claude/policy.yaml", import.meta.url), "utf8");
+const codex = await readFile(new URL("../clients/codex/policy.yaml", import.meta.url), "utf8");
 
-for (const [name, policy] of [["base", base], ["Pi", pi]]) {
+for (const [name, policy] of [["base", base], ["Pi", pi], ["Claude", claude], ["Codex", codex]]) {
   test(`${name} policy permits public web ports without private ranges`, () => {
     assert.match(policy, /^      - ports: \[80, 443\]$/m);
     assert.match(policy, /^          - "2000::\/3"$/m);
@@ -15,8 +17,12 @@ for (const [name, policy] of [["base", base], ["Pi", pi]]) {
   });
 }
 
-test("Pi-only filesystem permissions are not in the shared base", () => {
-  assert.doesNotMatch(base, /pi-customizations|\/home\/pi/);
+test("client-only filesystem permissions are not in the shared base", () => {
+  assert.doesNotMatch(base, /pi-customizations|\/home\/(pi|claude|codex)/);
   assert.match(pi, /\/opt\/pi-customizations/);
   assert.match(pi, /\/home\/pi\/\.pi\/agent/);
+  assert.match(claude, /\/home\/claude/);
+  assert.doesNotMatch(claude, /\/home\/(pi|codex)/);
+  assert.match(codex, /\/home\/codex/);
+  assert.doesNotMatch(codex, /\/home\/(pi|claude)/);
 });

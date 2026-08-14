@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+SCRIPT_PATH="$(readlink -f -- "${BASH_SOURCE[0]}")"
+ROOT="$(cd -- "$(dirname -- "$SCRIPT_PATH")/.." && pwd -P)"
+VERSION="$(<"$ROOT/VERSION")"
+IMAGE="${CODEX_OPENSHELL_IMAGE:-localhost/openshell-environments/codex:$VERSION}"
+workspace_args=()
+case "${1:-}" in
+  --openshell-recover|--openshell-recover-download)
+    [[ -n "${2:-}" ]] || { printf 'usage: codex --openshell-recover[-download] SANDBOX [arguments...]\n' >&2; exit 2; }
+    [[ "$1" == --openshell-recover ]] && workspace_args+=(--recover "$2") || workspace_args+=(--recover-download "$2")
+    shift 2
+    ;;
+esac
+
+exec "$ROOT/bin/openshell-workspace" \
+  --image "$IMAGE" \
+  --policy "$ROOT/clients/codex/policy.yaml" \
+  --name-prefix codex \
+  --command codex \
+  --recovery-command /bin/bash \
+  --exec-env HOME=/home/codex \
+  --build-hint "$ROOT/bin/openshell-image build codex" \
+  "${workspace_args[@]}" \
+  -- "$@"

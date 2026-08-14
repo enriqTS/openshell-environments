@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+SCRIPT_PATH="$(readlink -f -- "${BASH_SOURCE[0]}")"
+ROOT="$(cd -- "$(dirname -- "$SCRIPT_PATH")/.." && pwd -P)"
+action="${1:-install}"
+BIN_DIR="${OPENSHELL_CLIENT_BIN_DIR:-${XDG_BIN_HOME:-$HOME/.local/bin}}"
+
+check_install_target() {
+  local client="$1" source="$ROOT/bin/$1-openshell" target="$BIN_DIR/$1"
+  if [[ -e "$target" || -L "$target" ]]; then
+    if [[ -L "$target" && "$(readlink -f -- "$target")" == "$source" ]]; then
+      return
+    fi
+    printf 'install-openshell-client-launchers: refusing to replace existing path: %s\n' "$target" >&2
+    exit 1
+  fi
+}
+
+install_launcher() {
+  local client="$1" source="$ROOT/bin/$1-openshell" target="$BIN_DIR/$1"
+  if [[ -L "$target" ]]; then
+    printf '%s already launches OpenShell: %s\n' "$client" "$target"
+    return
+  fi
+  ln -s -- "$source" "$target"
+  printf 'installed %s -> %s\n' "$target" "$source"
+}
+
+uninstall_launcher() {
+  local client="$1" source="$ROOT/bin/$1-openshell" target="$BIN_DIR/$1"
+  if [[ -L "$target" && "$(readlink -f -- "$target")" == "$source" ]]; then
+    rm -- "$target"
+    printf 'removed %s\n' "$target"
+  elif [[ -e "$target" || -L "$target" ]]; then
+    printf 'install-openshell-client-launchers: refusing to remove unrelated path: %s\n' "$target" >&2
+    exit 1
+  fi
+}
+
+case "$action" in
+  install)
+    mkdir -p -- "$BIN_DIR"
+    check_install_target claude
+    check_install_target codex
+    install_launcher claude
+    install_launcher codex
+    ;;
+  uninstall)
+    uninstall_launcher claude
+    uninstall_launcher codex
+    ;;
+  *)
+    printf 'usage: install-openshell-client-launchers [install|uninstall]\n' >&2
+    exit 2
+    ;;
+esac

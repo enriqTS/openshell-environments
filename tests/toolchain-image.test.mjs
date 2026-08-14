@@ -4,6 +4,8 @@ import test from "node:test";
 
 const base = await readFile(new URL("../base/Dockerfile", import.meta.url), "utf8");
 const pi = await readFile(new URL("../clients/pi/Dockerfile", import.meta.url), "utf8");
+const claude = await readFile(new URL("../clients/claude/Dockerfile", import.meta.url), "utf8");
+const codex = await readFile(new URL("../clients/codex/Dockerfile", import.meta.url), "utf8");
 const imageTool = await readFile(new URL("../bin/openshell-image", import.meta.url), "utf8");
 
 test("base provides the established development toolchain", () => {
@@ -17,6 +19,28 @@ test("Rust remains usable when OpenShell supplies its restricted execution PATH"
   assert.match(base, /export RUSTUP_HOME=\/usr\/local\/rustup/);
   assert.match(base, /export CARGO_HOME=\/tmp\/cargo/);
   assert.match(base, /"\/usr\/local\/bin\/\$tool"/);
+});
+
+test("Claude and Codex are isolated client layers with their own CLI and user", () => {
+  assert.match(claude, /npm install -g --ignore-scripts @anthropic-ai\/claude-code/);
+  assert.match(claude, /useradd --create-home --shell \/bin\/bash claude/);
+  assert.match(claude, /USER claude/);
+  assert.match(claude, /io\.openshell\.client="claude"/);
+  assert.doesNotMatch(claude, /@openai\/codex|USER codex/);
+
+  assert.match(codex, /npm install -g --ignore-scripts @openai\/codex/);
+  assert.match(codex, /useradd --create-home --shell \/bin\/bash codex/);
+  assert.match(codex, /USER codex/);
+  assert.match(codex, /io\.openshell\.client="codex"/);
+  assert.doesNotMatch(codex, /@anthropic-ai\/claude-code|USER claude/);
+});
+
+test("image lifecycle supports Claude and Codex explicitly", () => {
+  assert.match(imageTool, /CLAUDE_IMAGE=.*claude:\$VERSION/);
+  assert.match(imageTool, /CODEX_IMAGE=.*codex:\$VERSION/);
+  assert.match(imageTool, /claude\) build_client claude "\$CLAUDE_IMAGE"/);
+  assert.match(imageTool, /codex\) build_client codex "\$CODEX_IMAGE"/);
+  assert.match(imageTool, /-t "\$image" "\$ROOT\/clients\/\$client"/);
 });
 
 test("Pi is a separate client layer with compatibility labels", () => {

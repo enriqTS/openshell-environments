@@ -7,6 +7,8 @@ VERSION="$(<"$ROOT/VERSION")"
 REGISTRY="${OPENSHELL_IMAGE_REGISTRY:-localhost/openshell-environments}"
 BASE_IMAGE="${OPENSHELL_BASE_IMAGE:-$REGISTRY/base:$VERSION}"
 PI_IMAGE="${PI_OPENSHELL_IMAGE:-$REGISTRY/pi:$VERSION}"
+CLAUDE_IMAGE="${CLAUDE_OPENSHELL_IMAGE:-$REGISTRY/claude:$VERSION}"
+CODEX_IMAGE="${CODEX_OPENSHELL_IMAGE:-$REGISTRY/codex:$VERSION}"
 CANONICAL_PI_CUSTOMIZATIONS_URL="https://github.com/enriqTS/pi-customizations.git"
 
 revision() {
@@ -81,6 +83,21 @@ fetch_pi_assets_release() {
   (cd "$dest" && sha256sum -c --ignore-missing SHA256SUMS)
 }
 
+build_client() {
+  local client="$1" image="$2"
+  require_docker
+  require_clean "$ROOT"
+  docker image inspect "$BASE_IMAGE" >/dev/null 2>&1 || {
+    printf 'openshell-image: base image is absent; run: %q build base\n' "$0" >&2
+    exit 1
+  }
+  docker buildx build --load \
+    --build-arg "BASE_IMAGE=$BASE_IMAGE" \
+    --build-arg "OPENSHELL_ENVIRONMENTS_VERSION=$VERSION" \
+    --build-arg "OPENSHELL_ENVIRONMENTS_REVISION=$(revision "$ROOT")" \
+    -t "$image" "$ROOT/clients/$client"
+}
+
 build_pi() {
   require_docker
   local pi_source="${1:-${PI_CUSTOMIZATIONS_DIR:-}}"
@@ -149,6 +166,8 @@ case "$command" in
     shift 2 || true
     case "$target" in
       base) build_base ;;
+      claude) build_client claude "$CLAUDE_IMAGE" ;;
+      codex) build_client codex "$CODEX_IMAGE" ;;
       pi)
         pi_source=""
         pi_ref=""
@@ -178,24 +197,30 @@ case "$command" in
         build_base
         build_pi "$pi_source" "$pi_ref" "$pi_assets_version"
         ;;
-      *) printf 'usage: openshell-image build {base|pi|all} {--pi-source PATH|--pi-ref REF|--pi-assets-version VERSION}\n' >&2; exit 2 ;;
+      *) printf 'usage: openshell-image build {base|claude|codex|pi|all} {--pi-source PATH|--pi-ref REF|--pi-assets-version VERSION}\n' >&2; exit 2 ;;
     esac
     ;;
   inspect)
     require_docker
     target="${2:-pi}"
-    [[ "$target" == base ]] && image="$BASE_IMAGE" || image="$PI_IMAGE"
+    case "$target" in
+      base) image="$BASE_IMAGE" ;;
+      claude) image="$CLAUDE_IMAGE" ;;
+      codex) image="$CODEX_IMAGE" ;;
+      pi) image="$PI_IMAGE" ;;
+      *) printf 'usage: openshell-image inspect [base|claude|codex|pi]\n' >&2; exit 2 ;;
+    esac
     docker image inspect "$image"
     ;;
   cleanup)
     require_docker
-    docker image rm "$PI_IMAGE" "$BASE_IMAGE"
+    docker image rm "$PI_IMAGE" "$CLAUDE_IMAGE" "$CODEX_IMAGE" "$BASE_IMAGE"
     ;;
   refs)
-    printf 'base=%s\npi=%s\n' "$BASE_IMAGE" "$PI_IMAGE"
+    printf 'base=%s\nclaude=%s\ncodex=%s\npi=%s\n' "$BASE_IMAGE" "$CLAUDE_IMAGE" "$CODEX_IMAGE" "$PI_IMAGE"
     ;;
   *)
-    printf 'usage: openshell-image {build {base|pi|all}|inspect [base|pi]|cleanup|refs}\n' >&2
+    printf 'usage: openshell-image {build {base|claude|codex|pi|all}|inspect [base|claude|codex|pi]|cleanup|refs}\n' >&2
     exit 2
     ;;
 esac
