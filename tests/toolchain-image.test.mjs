@@ -119,6 +119,7 @@ test("host updates use official installers and restore OpenShell launchers", () 
   assert.match(updater, /mv -Tf -- "\$replacement" "\$target"/);
   assert.match(updater, /config_dir="\$\{XDG_CONFIG_HOME:-\$HOME\/\.config\}\/openshell-clients"/);
   assert.match(updater, /"\$config_dir\/\$client\.image"/);
+  assert.match(updater, /"\$config_dir\/\$client\.direct"/);
   for (const launcher of [claudeLauncher, codexLauncher]) {
     assert.match(launcher, /exec "\$ROOT\/bin\/update-openshell-client"/);
     assert.match(launcher, /openshell-clients\/[a-z]+\.image/);

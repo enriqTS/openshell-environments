@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+SCRIPT_PATH="$(readlink -f -- "${BASH_SOURCE[0]}")"
+invoked="$(basename -- "$0")"
+case "$invoked" in
+  pi-direct|claude-direct|codex-direct) client="${invoked%-direct}" ;;
+  openshell-client-direct)
+    client="${1:-}"
+    [[ -n "$client" ]] && shift || true
+    ;;
+  *) client="" ;;
+esac
+case "$client" in
+  pi|claude|codex) ;;
+  *) printf 'usage: {pi|claude|codex}-direct [arguments...]\n' >&2; exit 2 ;;
+esac
+
+CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/openshell-clients"
+direct_file="$CONFIG_DIR/$client.direct"
+binary=""
+if [[ -f "$direct_file" && ! -L "$direct_file" ]]; then
+  IFS= read -r binary <"$direct_file" || true
+fi
+
+if [[ -z "$binary" ]]; then
+  case "$client" in
+    pi|codex)
+      npm_executable="$(command -v -- "${NPM:-npm}" 2>/dev/null || true)"
+      if [[ -n "$npm_executable" ]]; then
+        npm_prefix="$($npm_executable prefix -g 2>/dev/null || true)"
+        [[ "$npm_prefix" == /* && -x "$npm_prefix/bin/$client" ]] && binary="$(readlink -f -- "$npm_prefix/bin/$client")"
+      fi
+      if [[ -z "$binary" ]]; then
+        legacy="${XDG_DATA_HOME:-$HOME/.local/share}/openshell-clients/$client/npm/bin/$client"
+        [[ -x "$legacy" ]] && binary="$(readlink -f -- "$legacy")"
+      fi
+      ;;
+    claude)
+      versions="${CLAUDE_CONFIG_DIR:-$HOME/.local/share/claude}/versions"
+      if [[ -d "$versions" ]]; then
+        latest="$(find "$versions" -maxdepth 1 -type f -executable -printf '%f\n' | sort -V | tail -n 1)"
+        [[ -n "$latest" ]] && binary="$versions/$latest"
+      fi
+      ;;
+  esac
+fi
+
+[[ "$binary" == /* && -f "$binary" && ! -L "$binary" && -x "$binary" && "$(readlink -f -- "$binary")" != "$SCRIPT_PATH" ]] || {
+  printf '%s-direct: native host executable was not found; run `%s update` first\n' "$client" "$client" >&2
+  exit 1
+}
+exec "$binary" "$@"

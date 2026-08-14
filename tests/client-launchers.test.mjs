@@ -123,14 +123,33 @@ test("launcher installer exposes all clients and safely restores packaged Pi", a
   for (const client of ["pi", "claude", "codex"]) {
     assert.equal((await lstat(join(binHome, client))).isSymbolicLink(), true);
     assert.equal(await readlink(join(binHome, client)), join(root, "bin", `${client}-openshell`));
+    assert.equal((await lstat(join(binHome, `${client}-direct`))).isSymbolicLink(), true);
+    assert.equal(await readlink(join(binHome, `${client}-direct`)), join(root, "bin", "openshell-client-direct"));
   }
   assert.equal(await readFile(join(temp, "config", "openshell-clients", "pi.backend"), "utf8"), `${packagedPi}\n`);
 
   await execFileAsync(installer, ["uninstall"], { env });
   assert.equal(await readlink(join(binHome, "pi")), packagedPi);
-  for (const client of ["claude", "codex"]) {
-    await assert.rejects(lstat(join(binHome, client)), { code: "ENOENT" });
+  for (const client of ["pi", "claude", "codex"]) {
+    if (client !== "pi") await assert.rejects(lstat(join(binHome, client)), { code: "ENOENT" });
+    await assert.rejects(lstat(join(binHome, `${client}-direct`)), { code: "ENOENT" });
   }
+});
+
+test("direct launchers execute the recorded native host CLI", async () => {
+  const temp = await mkdtemp(join(tmpdir(), "openshell-direct-"));
+  const config = join(temp, "config", "openshell-clients");
+  const native = join(temp, "native-pi");
+  const direct = join(temp, "pi-direct");
+  await mkdir(config, { recursive: true });
+  await writeFile(native, "#!/bin/sh\nprintf '%s\\n' \"$*\"\n");
+  await chmod(native, 0o755);
+  await writeFile(join(config, "pi.direct"), `${native}\n`);
+  await symlink(join(root, "bin", "openshell-client-direct"), direct);
+  const { stdout } = await execFileAsync(direct, ["--version", "host"], {
+    env: { ...process.env, XDG_CONFIG_HOME: join(temp, "config") },
+  });
+  assert.equal(stdout, "--version host\n");
 });
 
 test("Pi shim intercepts only exact update and delegates normal commands", async () => {

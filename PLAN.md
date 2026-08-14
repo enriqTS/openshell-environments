@@ -9,6 +9,8 @@ Make `pi-customizations` completely unaware of OpenShell. The only dependency mu
 - [x] Correct Pi/Codex semantics to update npm's actual global host installation; protected prefixes use a normal interactive `sudo` password prompt before rebuilding the image.
 - [x] Add a safe local migration shim so exact `pi update` reaches the host updater while all other commands continue through the old packaged 0.2.0 launcher; uninstall restores it atomically.
 - [x] Ran `npm test` (57/57), shell syntax checks, and diff validation; reviewed and committed the global-host update fix.
+- [x] Add collision-safe `pi-direct`, `claude-direct`, and `codex-direct` launchers; host updates persist the exact native executable before restoring the OpenShell command.
+- [x] Tested (`npm test`, 58/58), activated all three direct commands, verified their native versions, reviewed, and committed direct host launch support.
 
 ## Target boundary
 

@@ -27,7 +27,7 @@ async function fixture(client, { buildFails = false, installerFails = false } = 
   await writeFile(join(tools, "image-tool"), `#!/bin/sh\nif [ "$1" = refs ]; then printf '${client}=localhost/openshell-environments/${client}:0.3.0\\n'; exit 0; fi\nprintf '%s\\n' "$*" >"$IMAGE_LOG"\nexit ${buildFails ? 1 : 0}\n`);
   await chmod(join(tools, "image-tool"), 0o755);
 
-  const installer = `#!/bin/sh\n${installerFails ? "exit 23" : `cat >"$OPENSHELL_UPDATE_TARGET" <<'CLI'\n#!/bin/sh\necho '${client} 9.8.7'\nCLI\nchmod 755 "$OPENSHELL_UPDATE_TARGET"`}\n`;
+  const installer = `#!/bin/sh\n${installerFails ? "exit 23" : `cat >"$FAKE_NATIVE" <<'CLI'\n#!/bin/sh\necho '${client} 9.8.7'\nCLI\nchmod 755 "$FAKE_NATIVE"\nln -s "$FAKE_NATIVE" "$OPENSHELL_UPDATE_TARGET"`}\n`;
   await writeFile(join(tools, "curl"), `#!/bin/sh\ncat <<'INSTALL'\n${installer}INSTALL\n`);
   await chmod(join(tools, "curl"), 0o755);
   const npmInstall = installerFails ? "  exit 23\n" : `  mkdir -p "$FAKE_NPM_PREFIX/bin"\n  client=${JSON.stringify(client)}\n  cat >"$FAKE_NPM_PREFIX/bin/$client" <<CLI\n#!/bin/sh\necho '$client 9.8.7'\nCLI\n  chmod 755 "$FAKE_NPM_PREFIX/bin/$client"\n  exit 0\n`;
@@ -52,6 +52,7 @@ async function fixture(client, { buildFails = false, installerFails = false } = 
       XDG_DATA_HOME: join(temp, "data"),
       FAKE_NPM_PREFIX: join(temp, "npm-global"),
       SUDO_LOG: join(temp, "sudo.log"),
+      FAKE_NATIVE: join(temp, `${client}-native`),
       IMAGE_LOG: imageLog,
     },
   };
@@ -67,6 +68,8 @@ for (const client of ["pi", "claude", "codex"]) {
     assert.match(build, new RegExp(`build ${client} .*--cli-version 9\\.8\\.7`));
     if (client === "pi") assert.match(build, /--pi-assets-version 0\.2\.0/);
     assert.equal(await readFile(join(f.temp, "config", "openshell-clients", `${client}.image`), "utf8"), `localhost/openshell-environments/${client}:0.3.0\n`);
+    const expectedDirect = client === "claude" ? f.env.FAKE_NATIVE : join(f.env.FAKE_NPM_PREFIX, "bin", client);
+    assert.equal(await readFile(join(f.temp, "config", "openshell-clients", `${client}.direct`), "utf8"), `${expectedDirect}\n`);
   });
 }
 

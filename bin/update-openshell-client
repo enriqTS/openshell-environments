@@ -99,6 +99,14 @@ cli_version="$(printf '%s\n' "$version_output" | grep -Eo '[0-9]+\.[0-9]+\.[0-9]
   exit 1
 }
 
+# Preserve an explicit route to the native host CLI before restoring the
+# public OpenShell command symlink (Claude's installer uses that same path).
+config_dir="${XDG_CONFIG_HOME:-$HOME/.config}/openshell-clients"
+mkdir -p -- "$config_dir"
+direct_tmp="$config_dir/.${client}.direct.$$"
+printf '%s\n' "$vendor_binary" >"$direct_tmp"
+mv -f -- "$direct_tmp" "$config_dir/$client.direct"
+
 restore_launcher
 trap - EXIT HUP INT TERM
 
@@ -114,8 +122,6 @@ image_ref="$("$image_tool" refs | awk -F= -v client="$client" '$1 == client { pr
   printf 'update-openshell-client: image tool returned an invalid %s reference: %s\n' "$client" "$image_ref" >&2
   exit 1
 }
-config_dir="${XDG_CONFIG_HOME:-$HOME/.config}/openshell-clients"
-mkdir -p -- "$config_dir"
 config_tmp="$config_dir/.${client}.image.$$"
 printf '%s\n' "$image_ref" >"$config_tmp"
 mv -f -- "$config_tmp" "$config_dir/$client.image"
