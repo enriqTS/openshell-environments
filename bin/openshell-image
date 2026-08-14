@@ -96,6 +96,11 @@ build_client() {
     --build-arg "OPENSHELL_ENVIRONMENTS_VERSION=$VERSION" \
     --build-arg "OPENSHELL_ENVIRONMENTS_REVISION=$(revision "$ROOT")" \
     -t "$image" "$ROOT/clients/$client"
+  if [[ "$client" == codex ]]; then
+    docker run --rm -e HOME=/home/codex "$image" codex-openshell-entrypoint --version
+  else
+    docker run --rm -e HOME="/home/$client" "$image" "$client" --version
+  fi
 }
 
 build_pi() {

@@ -14,7 +14,7 @@ OpenShell sandboxes receive snapshots, not host bind mounts. The launcher upload
 
 Each client has a distinct image layer, policy, credential profile, state synchronization hook, tests, and threat model. Never grant a client the union of another client's permissions. The Pi hook remains in `pi-customizations`; it transfers sanitized preferences and only current-project sessions. Raw OAuth state, SSH keys, host configuration, and other projects' sessions are not transferred.
 
-Provider credential substitution is gateway-owned and must match both endpoint and requesting binary. General web authorization does not broaden a provider's credential-routing profile.
+Provider credential substitution is gateway-owned and must match both endpoint and requesting binary. General web authorization does not broaden a provider's credential-routing profile. Claude/Codex persistence follows this boundary: host setup submits credentials to gateway storage, XDG activation files contain only provider names, and Codex's ephemeral `auth.json` contains only gateway-issued opaque handles. Never replace this with host auth-file upload or workspace synchronization.
 
 ## Operational constraints
 

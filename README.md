@@ -53,7 +53,14 @@ bin/install-openshell-client-launchers install
 
 `${XDG_BIN_HOME:-$HOME/.local/bin}` must precede any native Claude/Codex installation on `PATH`. The installer refuses to replace an existing path in that directory. Use `bin/install-openshell-client-launchers uninstall` to remove only symlinks owned by this checkout.
 
-These launchers reuse Pi's workspace/Git lifecycle but intentionally do not copy Pi's provider hooks or state synchronization. Their sandboxes are deleted after each successful run, so authenticate interactively each time; the lightweight launchers deliberately do not copy raw host API keys into the sandbox. Images are never built or pulled during launch. See [`clients/claude/README.md`](clients/claude/README.md) and [`clients/codex/README.md`](clients/codex/README.md).
+These launchers reuse Pi's workspace/Git lifecycle and can retain authentication through gateway providers even though every successful sandbox is deleted. Configure them once after logging in with the preserved direct CLIs:
+
+```bash
+bin/setup-openshell-client-auth claude   # prompts for `claude-direct setup-token` output
+bin/setup-openshell-client-auth codex    # imports host ~/.codex/auth.json into gateway storage
+```
+
+The gateway injects only opaque credential handles. Codex materializes an ephemeral `auth.json` containing those handles; raw host OAuth files, API keys, and tokens are never copied into a sandbox. The gateway refreshes Codex's access token. Images are never built or pulled during launch. See [`clients/claude/README.md`](clients/claude/README.md) and [`clients/codex/README.md`](clients/codex/README.md).
 
 ## Layout
 

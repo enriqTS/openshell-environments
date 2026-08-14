@@ -11,6 +11,8 @@ RUN npm install -g --ignore-scripts @openai/codex \
 # this image's ENV, so callers must pass --env HOME=/home/codex on
 # `sandbox create`/`sandbox exec` (see clients/codex/README.md). This ENV
 # only affects plain `docker run` outside OpenShell.
+COPY --chmod=0755 codex-openshell-entrypoint /usr/local/bin/codex-openshell-entrypoint
+
 ENV HOME=/home/codex
 WORKDIR /workspace
 USER codex

@@ -5,6 +5,9 @@ SCRIPT_PATH="$(readlink -f -- "${BASH_SOURCE[0]}")"
 ROOT="$(cd -- "$(dirname -- "$SCRIPT_PATH")/.." && pwd -P)"
 VERSION="$(<"$ROOT/VERSION")"
 IMAGE="${CODEX_OPENSHELL_IMAGE:-localhost/openshell-environments/codex:$VERSION}"
+PROVIDER="${CODEX_OPENSHELL_PROVIDER:-}"
+PROVIDER_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/openshell-clients/codex.provider"
+if [[ -z "$PROVIDER" && -f "$PROVIDER_FILE" ]]; then IFS= read -r PROVIDER <"$PROVIDER_FILE" || true; fi
 workspace_args=()
 case "${1:-}" in
   --openshell-recover|--openshell-recover-download)
@@ -17,8 +20,9 @@ esac
 exec "$ROOT/bin/openshell-workspace" \
   --image "$IMAGE" \
   --policy "$ROOT/clients/codex/policy.yaml" \
+  --provider "${PROVIDER:-none}" \
   --name-prefix codex \
-  --command codex \
+  --command codex-openshell-entrypoint \
   --recovery-command /bin/bash \
   --exec-env HOME=/home/codex \
   --build-hint "$ROOT/bin/openshell-image build codex" \

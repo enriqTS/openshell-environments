@@ -1,0 +1,115 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+SCRIPT_PATH="$(readlink -f -- "${BASH_SOURCE[0]}")"
+ROOT="$(cd -- "$(dirname -- "$SCRIPT_PATH")/.." && pwd -P)"
+CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/openshell-clients"
+CLAUDE_PROVIDER="${CLAUDE_OPENSHELL_PROVIDER_NAME:-claude-openshell}"
+CODEX_PROVIDER="${CODEX_OPENSHELL_PROVIDER_NAME:-codex-openshell}"
+CODEX_CLIENT_ID="${CODEX_OAUTH_CLIENT_ID:-app_EMoamEEZ73f0CkXaXp7hrann}"
+
+require_openshell() {
+  command -v openshell >/dev/null 2>&1 || { printf 'setup-openshell-client-auth: openshell CLI is not on PATH\n' >&2; exit 127; }
+  openshell settings set --global --key providers_v2_enabled --value true >/dev/null
+}
+
+install_profile() {
+  local id="$1" file="$2"
+  openshell provider profile lint -f "$file" >/dev/null
+  if openshell provider profile export "$id" -o yaml >/dev/null 2>&1; then
+    openshell provider profile update "$id" -f "$file" >/dev/null
+  else
+    openshell provider profile import -f "$file" >/dev/null
+  fi
+}
+
+activate_provider() {
+  local client="$1" provider="$2" target="$CONFIG_DIR/$1.provider" temp
+  mkdir -p "$CONFIG_DIR"
+  chmod 700 "$CONFIG_DIR"
+  temp="$(mktemp "$CONFIG_DIR/.provider.XXXXXX")"
+  printf '%s\n' "$provider" >"$temp"
+  chmod 600 "$temp"
+  mv -f "$temp" "$target"
+}
+
+setup_claude() {
+  local token="${CLAUDE_CODE_OAUTH_TOKEN:-}"
+  if [[ -z "$token" ]]; then
+    [[ -t 0 ]] || { printf 'setup-openshell-client-auth: set CLAUDE_CODE_OAUTH_TOKEN or run interactively\n' >&2; exit 1; }
+    printf 'Run `claude-direct setup-token` in another terminal if you do not have a setup token.\n' >&2
+    read -r -s -p 'Claude setup token: ' token
+    printf '\n' >&2
+  fi
+  [[ -n "$token" ]] || { printf 'setup-openshell-client-auth: Claude token is empty\n' >&2; exit 1; }
+  install_profile claude-openshell-oauth "$ROOT/clients/claude/provider.yaml"
+  if openshell provider get "$CLAUDE_PROVIDER" >/dev/null 2>&1; then
+    CLAUDE_CODE_OAUTH_TOKEN="$token" openshell provider update "$CLAUDE_PROVIDER" --credential CLAUDE_CODE_OAUTH_TOKEN >/dev/null
+  else
+    CLAUDE_CODE_OAUTH_TOKEN="$token" openshell provider create --name "$CLAUDE_PROVIDER" --type claude-openshell-oauth --credential CLAUDE_CODE_OAUTH_TOKEN >/dev/null
+  fi
+  token=""
+  unset CLAUDE_CODE_OAUTH_TOKEN
+  activate_provider claude "$CLAUDE_PROVIDER"
+  printf 'Claude will use OpenShell provider %s.\n' "$CLAUDE_PROVIDER"
+}
+
+setup_codex() {
+  local auth_file="${CODEX_HOST_AUTH_FILE:-${CODEX_HOME:-$HOME/.codex}/auth.json}"
+  [[ -f "$auth_file" ]] || { printf 'setup-openshell-client-auth: Codex auth is missing: %s (run codex-direct login)\n' "$auth_file" >&2; exit 1; }
+  local -a encoded
+  mapfile -t encoded < <(node - "$auth_file" <<'NODE'
+const fs = require("fs");
+const auth = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+const values = [auth.tokens?.access_token, auth.tokens?.refresh_token, auth.tokens?.account_id];
+if (values.some(value => typeof value !== "string" || value.length === 0)) process.exit(1);
+for (const value of values) console.log(Buffer.from(value).toString("base64"));
+NODE
+  ) || { printf 'setup-openshell-client-auth: Codex auth.json lacks access_token, refresh_token, or account_id\n' >&2; exit 1; }
+  ((${#encoded[@]} == 3)) || { printf 'setup-openshell-client-auth: Codex auth.json is incomplete\n' >&2; exit 1; }
+  local access_token refresh_token account_id
+  access_token="$(printf %s "${encoded[0]}" | base64 -d)"
+  refresh_token="$(printf %s "${encoded[1]}" | base64 -d)"
+  account_id="$(printf %s "${encoded[2]}" | base64 -d)"
+
+  install_profile codex-openshell-oauth "$ROOT/clients/codex/provider.yaml"
+  if openshell provider get "$CODEX_PROVIDER" >/dev/null 2>&1; then
+    CODEX_AUTH_ACCESS_TOKEN="$access_token" CODEX_AUTH_ACCOUNT_ID="$account_id" \
+      openshell provider update "$CODEX_PROVIDER" --credential CODEX_AUTH_ACCESS_TOKEN --credential CODEX_AUTH_ACCOUNT_ID >/dev/null
+  else
+    CODEX_AUTH_ACCESS_TOKEN="$access_token" CODEX_AUTH_ACCOUNT_ID="$account_id" \
+      openshell provider create --name "$CODEX_PROVIDER" --type codex-openshell-oauth \
+        --credential CODEX_AUTH_ACCESS_TOKEN --credential CODEX_AUTH_ACCOUNT_ID >/dev/null
+  fi
+  CODEX_REFRESH_TOKEN="$refresh_token" openshell provider refresh configure "$CODEX_PROVIDER" \
+    --credential-key CODEX_AUTH_ACCESS_TOKEN \
+    --strategy oauth2-refresh-token \
+    --material "client_id=$CODEX_CLIENT_ID" \
+    --secret-material-env refresh_token=CODEX_REFRESH_TOKEN >/dev/null
+  openshell provider refresh rotate "$CODEX_PROVIDER" --credential-key CODEX_AUTH_ACCESS_TOKEN >/dev/null
+  access_token="" refresh_token="" account_id=""
+  activate_provider codex "$CODEX_PROVIDER"
+  printf 'Codex will use OpenShell provider %s.\n' "$CODEX_PROVIDER"
+}
+
+status() {
+  local client provider_file provider
+  for client in claude codex; do
+    provider_file="$CONFIG_DIR/$client.provider"
+    if [[ -f "$provider_file" ]]; then
+      IFS= read -r provider <"$provider_file" || true
+      printf '%s=%s\n' "$client" "${provider:-not-configured}"
+    else
+      printf '%s=not-configured\n' "$client"
+    fi
+  done
+}
+
+command="${1:-all}"
+case "$command" in
+  claude) require_openshell; setup_claude ;;
+  codex) require_openshell; setup_codex ;;
+  all) require_openshell; setup_claude; setup_codex ;;
+  status) status ;;
+  *) printf 'usage: setup-openshell-client-auth {claude|codex|all|status}\n' >&2; exit 2 ;;
+esac

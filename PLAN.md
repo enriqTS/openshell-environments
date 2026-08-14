@@ -10,7 +10,11 @@ Make the host `claude` and `codex` terminal commands automatically launch their 
 - [x] Diagnosed Claude's login 403 against upstream OpenShell examples: `platform.claude.com` must use opaque TLS rather than REST/TLS interception. Switched both interactive-login client policies to L4 public HTTPS while retaining the same destination/port limits; provider-specific L7 layers remain possible.
 - [x] Clarified that Codex's missing-system-bubblewrap message is informational because it uses its bundled fallback and OpenShell remains the outer sandbox; do not broaden policy for nested sandboxing.
 - [x] Added policy regression coverage, ran all 33 tests, and reviewed the interactive-login transport fix; ready to commit.
-- [ ] Determine the user's available gateway provider/device-auth setup if Codex still cannot authenticate after the L4 policy change; never copy raw host OAuth/API-key state into the sandbox.
+- [x] Confirmed both interactive logins now work, but ephemeral sandbox homes force repeated login.
+- [x] Implemented Pi-equivalent persistent authentication through gateway providers: a custom long-lived Claude OAuth-token profile, a refresh-capable Codex OAuth profile, host-only setup/import, provider attachment, and Codex opaque-handle `auth.json` materialization. Raw host OAuth files/tokens never enter sandbox sync or activation config.
+- [x] Added fail-closed setup, launcher, provider, image, secret-argument, and auth-file tests; documented setup/rotation; all 39 tests pass.
+- [x] Reviewed the persistent-auth implementation and prepared it for commit.
+- [ ] Validate profile import, gateway refresh/substitution, rebuilt Codex image, and real Claude/Codex requests on the user's host (this coding sandbox has no Docker/OpenShell CLI).
 - [x] Added a build-time `claude --version` smoke test, ran all 32 repository tests, and reviewed the Claude native-binary fix; ready to commit.
 - [x] Fixed the first real Claude launch failure: generated names could reach 20 characters while OpenShell accepts at most 19. The shared launcher now dynamically truncates only the project component while preserving the client prefix and full PID suffix.
 - [x] Added generated-name length coverage and re-ran all 32 tests; reviewed and ready to commit the fix.

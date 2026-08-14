@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+if [[ -n "${CODEX_AUTH_ACCESS_TOKEN:-}" || -n "${CODEX_AUTH_ACCOUNT_ID:-}" ]]; then
+  [[ -n "${CODEX_AUTH_ACCESS_TOKEN:-}" ]] || { printf 'codex-openshell: provider omitted CODEX_AUTH_ACCESS_TOKEN\n' >&2; exit 1; }
+  [[ -n "${CODEX_AUTH_ACCOUNT_ID:-}" ]] || { printf 'codex-openshell: provider omitted CODEX_AUTH_ACCOUNT_ID\n' >&2; exit 1; }
+  mkdir -p "$HOME/.codex"
+  umask 077
+  node <<'NODE'
+const fs = require("fs");
+const b64u = value => Buffer.from(JSON.stringify(value)).toString("base64url");
+const now = Math.floor(Date.now() / 1000);
+const fallbackIdToken = [
+  b64u({ alg: "none", typ: "JWT" }),
+  b64u({
+    iss: "https://auth.openai.com",
+    aud: "codex",
+    sub: "openshell-provider",
+    email: "provider@openshell.local",
+    iat: now,
+    exp: now + 3600,
+  }),
+  "placeholder",
+].join(".");
+const auth = {
+  auth_mode: "chatgpt",
+  OPENAI_API_KEY: null,
+  tokens: {
+    id_token: process.env.CODEX_AUTH_ID_TOKEN || fallbackIdToken,
+    access_token: process.env.CODEX_AUTH_ACCESS_TOKEN,
+    refresh_token: process.env.CODEX_AUTH_REFRESH_TOKEN || "gateway-managed-refresh-token",
+    account_id: process.env.CODEX_AUTH_ACCOUNT_ID,
+  },
+  last_refresh: new Date().toISOString(),
+};
+fs.writeFileSync(`${process.env.HOME}/.codex/auth.json`, `${JSON.stringify(auth, null, 2)}\n`, { mode: 0o600 });
+NODE
+fi
+
+exec codex "$@"

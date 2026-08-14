@@ -6,6 +6,9 @@ const base = await readFile(new URL("../base/Dockerfile", import.meta.url), "utf
 const pi = await readFile(new URL("../clients/pi/Dockerfile", import.meta.url), "utf8");
 const claude = await readFile(new URL("../clients/claude/Dockerfile", import.meta.url), "utf8");
 const codex = await readFile(new URL("../clients/codex/Dockerfile", import.meta.url), "utf8");
+const codexEntrypoint = await readFile(new URL("../clients/codex/codex-openshell-entrypoint", import.meta.url), "utf8");
+const claudeProvider = await readFile(new URL("../clients/claude/provider.yaml", import.meta.url), "utf8");
+const codexProvider = await readFile(new URL("../clients/codex/provider.yaml", import.meta.url), "utf8");
 const imageTool = await readFile(new URL("../bin/openshell-image", import.meta.url), "utf8");
 
 test("base provides the established development toolchain", () => {
@@ -37,12 +40,33 @@ test("Claude and Codex are isolated client layers with their own CLI and user", 
   assert.doesNotMatch(codex, /@anthropic-ai\/claude-code|USER claude/);
 });
 
+test("client providers expose only gateway-routed authentication handles", () => {
+  assert.match(claudeProvider, /env_vars: \[CLAUDE_CODE_OAUTH_TOKEN\]/);
+  assert.match(claudeProvider, /auth_style: bearer/);
+  assert.doesNotMatch(claudeProvider, /sk-ant-|access_token:/);
+  assert.match(codexProvider, /env_vars: \[CODEX_AUTH_ACCESS_TOKEN\]/);
+  assert.match(codexProvider, /strategy: oauth2_refresh_token/);
+  assert.match(codexProvider, /secret: true/);
+  assert.doesNotMatch(codexProvider, /eyJ|refresh_token: [^\n]*[A-Za-z0-9_-]{20}/);
+});
+
+test("Codex materializes native auth from opaque provider handles", () => {
+  assert.match(codex, /COPY --chmod=0755 codex-openshell-entrypoint/);
+  assert.match(codexEntrypoint, /CODEX_AUTH_ACCESS_TOKEN/);
+  assert.match(codexEntrypoint, /CODEX_AUTH_ACCOUNT_ID/);
+  assert.match(codexEntrypoint, /auth_mode: "chatgpt"/);
+  assert.match(codexEntrypoint, /mode: 0o600/);
+  assert.match(codexEntrypoint, /exec codex "\$@"/);
+});
+
 test("image lifecycle supports Claude and Codex explicitly", () => {
   assert.match(imageTool, /CLAUDE_IMAGE=.*claude:\$VERSION/);
   assert.match(imageTool, /CODEX_IMAGE=.*codex:\$VERSION/);
   assert.match(imageTool, /claude\) build_client claude "\$CLAUDE_IMAGE"/);
   assert.match(imageTool, /codex\) build_client codex "\$CODEX_IMAGE"/);
   assert.match(imageTool, /-t "\$image" "\$ROOT\/clients\/\$client"/);
+  assert.match(imageTool, /codex-openshell-entrypoint --version/);
+  assert.match(imageTool, /"\$image" "\$client" --version/);
 });
 
 test("Pi is a separate client layer with compatibility labels", () => {

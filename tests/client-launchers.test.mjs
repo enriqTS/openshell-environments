@@ -39,7 +39,8 @@ async function runLauncher(client, home, imageVariable) {
   assert.ok(sandboxName.length <= 19, `sandbox name exceeds OpenShell's limit: ${sandboxName}`);
   assert.match(sandboxName, new RegExp(`^${client.slice(0, 5)}-[a-z0-9-]+-\\d+$`));
   assert.match(calls, new RegExp(`sandbox create .* --from ${image.replaceAll("/", "\\/")}`));
-  assert.match(calls, new RegExp(`sandbox exec .* --env HOME=${home} .* -- ${client} --version extra argument`));
+  const sandboxCommand = client === "codex" ? "codex-openshell-entrypoint" : client;
+  assert.match(calls, new RegExp(`sandbox exec .* --env HOME=${home} .* -- ${sandboxCommand} --version extra argument`));
   assert.match(calls, /sandbox download/);
   assert.match(calls, /sandbox delete/);
 }
@@ -73,6 +74,29 @@ test("Claude and Codex launchers expose retained-sandbox recovery", async () => 
     assert.doesNotMatch(calls, /sandbox create/);
     assert.match(calls, /sandbox exec .* -- \/bin\/bash/);
     assert.match(calls, /sandbox download retained-box/);
+  }
+});
+
+test("launchers attach configured gateway providers", async () => {
+  for (const client of ["claude", "codex"]) {
+    const temp = await mkdtemp(join(tmpdir(), `${client}-provider-`));
+    const fakeBin = join(temp, "bin");
+    const workdir = join(temp, "project");
+    const config = join(temp, "config", "openshell-clients");
+    const log = join(temp, "openshell.log");
+    await mkdir(fakeBin);
+    await mkdir(workdir);
+    await mkdir(config, { recursive: true });
+    await writeFile(join(config, `${client}.provider`), `${client}-gateway\n`);
+    for (const command of ["docker", "openshell"]) {
+      await writeFile(join(fakeBin, command), `#!/usr/bin/env bash\nprintf '%s\\n' "$*" >>"$FAKE_LOG"\nexit 0\n`);
+      await chmod(join(fakeBin, command), 0o755);
+    }
+    await execFileAsync(join(root, "bin", `${client}-openshell`), ["--version"], {
+      cwd: workdir,
+      env: { ...process.env, PATH: `${fakeBin}:${process.env.PATH}`, XDG_CONFIG_HOME: join(temp, "config"), FAKE_LOG: log },
+    });
+    assert.match(await readFile(log, "utf8"), new RegExp(`sandbox create .* --provider ${client}-gateway`));
   }
 });
 
