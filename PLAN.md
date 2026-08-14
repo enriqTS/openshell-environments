@@ -6,6 +6,9 @@ Make the host `claude` and `codex` terminal commands automatically launch their 
 
 ### Active approach / progress
 
+- [x] Fixed the second real Claude launch failure: Claude Code requires its npm postinstall to install/activate the native binary, so its image no longer uses `--ignore-scripts`; added a regression assertion.
+- [ ] Clarify the standalone Codex authentication limitation and determine the user's available gateway provider/device-auth setup before adding any credential path; never copy raw host OAuth/API-key state into the sandbox.
+- [x] Added a build-time `claude --version` smoke test, ran all 32 repository tests, and reviewed the Claude native-binary fix; ready to commit.
 - [x] Fixed the first real Claude launch failure: generated names could reach 20 characters while OpenShell accepts at most 19. The shared launcher now dynamically truncates only the project component while preserving the client prefix and full PID suffix.
 - [x] Added generated-name length coverage and re-ran all 32 tests; reviewed and ready to commit the fix.
 - [x] Confirmed `bin/openshell-workspace` already owns the required upload, sandbox, execution, download, and cleanup lifecycle.

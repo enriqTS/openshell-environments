@@ -22,7 +22,9 @@ test("Rust remains usable when OpenShell supplies its restricted execution PATH"
 });
 
 test("Claude and Codex are isolated client layers with their own CLI and user", () => {
-  assert.match(claude, /npm install -g --ignore-scripts @anthropic-ai\/claude-code/);
+  assert.match(claude, /npm install -g @anthropic-ai\/claude-code/);
+  assert.doesNotMatch(claude, /npm install -g --ignore-scripts @anthropic-ai\/claude-code/);
+  assert.match(claude, /claude --version/);
   assert.match(claude, /useradd --create-home --shell \/bin\/bash claude/);
   assert.match(claude, /USER claude/);
   assert.match(claude, /io\.openshell\.client="claude"/);

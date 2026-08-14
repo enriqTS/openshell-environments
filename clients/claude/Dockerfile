@@ -1,7 +1,10 @@
 ARG BASE_IMAGE=localhost/openshell-environments/base:0.3.0
 FROM ${BASE_IMAGE}
 
-RUN npm install -g --ignore-scripts @anthropic-ai/claude-code \
+# Claude Code's postinstall downloads/activates its platform-native binary;
+# --ignore-scripts leaves a JS shim that fails immediately at runtime.
+RUN npm install -g @anthropic-ai/claude-code \
+  && claude --version \
   && useradd --create-home --shell /bin/bash claude \
   && mkdir -p /workspace \
   && chown claude:claude /workspace \
