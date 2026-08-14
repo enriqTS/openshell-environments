@@ -41,7 +41,7 @@ claude update
 codex update
 ```
 
-Exact update commands run on the host, not in a sandbox. The shared updater temporarily removes the verified OpenShell command symlink, runs the vendor's official installer (`pi.dev/install.sh`, `claude.ai/install.sh`, or `@openai/codex` in a user-owned npm prefix), reads the installed version, atomically restores the same launcher even on failure, and builds the image with that exact version. Other Pi forms such as `pi update --models` continue into the sandbox. The compatible Pi launcher in `pi-customizations` owns the `pi update` delegation.
+Exact update commands run on the host, not in a sandbox. The shared updater temporarily removes the verified OpenShell command symlink, updates Pi and Codex with their official npm packages in user-owned prefixes, runs Claude's official installer (`claude.ai/install.sh`), reads the installed version, atomically restores the same launcher even on failure, and builds the image with that exact version. Other Pi forms such as `pi update --models` continue into the sandbox. The compatible Pi launcher in `pi-customizations` owns the `pi update` delegation.
 
 If an update prints only vendor-installer output and not `updated … and rebuilt its OpenShell image`, the command resolved to a native vendor executable rather than the OpenShell launcher. Remove that vendor executable from `${XDG_BIN_HOME:-$HOME/.local/bin}` and rerun `bin/install-openshell-client-launchers install`; it deliberately refuses to overwrite an unrelated command.
 

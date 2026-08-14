@@ -44,10 +44,14 @@ rm -- "$target"
 restore_needed=1
 export OPENSHELL_UPDATE_TARGET="$target"
 
-codex_npm_prefix=""
+npm_prefix=""
 case "$client" in
   pi)
-    "${CURL:-curl}" -fsSL "${PI_INSTALLER_URL:-https://pi.dev/install.sh}" | sh
+    # The curl installer delegates to npm's global prefix, which can be a
+    # read-only system installation. Install the documented npm package into
+    # an XDG-owned prefix instead.
+    npm_prefix="${PI_NPM_PREFIX:-${XDG_DATA_HOME:-$HOME/.local/share}/openshell-clients/pi/npm}"
+    "${NPM:-npm}" i -g --ignore-scripts --prefix "$npm_prefix" "${PI_NPM_PACKAGE:-@earendil-works/pi-coding-agent}"
     ;;
   claude)
     "${CURL:-curl}" -fsSL "${CLAUDE_INSTALLER_URL:-https://claude.ai/install.sh}" | bash
@@ -55,16 +59,16 @@ case "$client" in
   codex)
     # A system npm prefix is normally root-owned. Keep the vendor installation
     # user-owned, while the public command remains this restored launcher.
-    codex_npm_prefix="${CODEX_NPM_PREFIX:-${XDG_DATA_HOME:-$HOME/.local/share}/openshell-clients/codex/npm}"
-    "${NPM:-npm}" i -g --prefix "$codex_npm_prefix" "${CODEX_NPM_PACKAGE:-@openai/codex}"
+    npm_prefix="${CODEX_NPM_PREFIX:-${XDG_DATA_HOME:-$HOME/.local/share}/openshell-clients/codex/npm}"
+    "${NPM:-npm}" i -g --prefix "$npm_prefix" "${CODEX_NPM_PACKAGE:-@openai/codex}"
     ;;
 esac
 
 vendor_binary=""
 if [[ -x "$target" ]]; then
   vendor_binary="$(readlink -f -- "$target")"
-elif [[ "$client" == codex && -x "$codex_npm_prefix/bin/codex" ]]; then
-  vendor_binary="$(readlink -f -- "$codex_npm_prefix/bin/codex")"
+elif [[ "$client" != claude && -x "$npm_prefix/bin/$client" ]]; then
+  vendor_binary="$(readlink -f -- "$npm_prefix/bin/$client")"
 fi
 [[ -n "$vendor_binary" && "$vendor_binary" != "$launcher" ]] || {
   printf 'update-openshell-client: vendor installer did not produce a new %s executable\n' "$client" >&2

@@ -110,9 +110,10 @@ test("Pi installs only the sanitized asset archive into standard resource paths"
 });
 
 test("host updates use official installers and restore OpenShell launchers", () => {
-  assert.match(updater, /https:\/\/pi\.dev\/install\.sh/);
   assert.match(updater, /https:\/\/claude\.ai\/install\.sh/);
-  assert.match(updater, /i -g --prefix "\$codex_npm_prefix" "\$\{CODEX_NPM_PACKAGE:-@openai\/codex\}"/);
+  assert.match(updater, /i -g --ignore-scripts --prefix "\$npm_prefix" "\$\{PI_NPM_PACKAGE:-@earendil-works\/pi-coding-agent\}"/);
+  assert.match(updater, /PI_NPM_PREFIX:-\$\{XDG_DATA_HOME:-\$HOME\/\.local\/share\}\/openshell-clients\/pi\/npm/);
+  assert.match(updater, /i -g --prefix "\$npm_prefix" "\$\{CODEX_NPM_PACKAGE:-@openai\/codex\}"/);
   assert.match(updater, /CODEX_NPM_PREFIX:-\$\{XDG_DATA_HOME:-\$HOME\/\.local\/share\}\/openshell-clients\/codex\/npm/);
   assert.match(updater, /trap restore_launcher EXIT HUP INT TERM/);
   assert.match(updater, /mv -Tf -- "\$replacement" "\$target"/);

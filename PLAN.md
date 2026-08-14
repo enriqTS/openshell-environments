@@ -6,8 +6,8 @@ Make `pi-customizations` completely unaware of OpenShell. The only dependency mu
 
 ### Current maintenance
 
-- [x] Make Codex vendor updates use a user-owned npm prefix rather than the non-writable system global prefix; regression coverage verifies the installed binary and launcher restoration.
-- [x] Ran `npm test` (54/54), reviewed the diff, and committed this maintenance fix.
+- [x] Make Pi and Codex vendor updates use user-owned npm prefixes rather than the non-writable system global prefix; regression coverage verifies the installed binaries and launcher restoration.
+- [x] Ran `npm test` (55/55), reviewed the diff, and committed the Pi update maintenance fix.
 
 ## Target boundary
 

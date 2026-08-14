@@ -30,7 +30,8 @@ async function fixture(client, { buildFails = false, installerFails = false } = 
   const installer = `#!/bin/sh\n${installerFails ? "exit 23" : `cat >"$OPENSHELL_UPDATE_TARGET" <<'CLI'\n#!/bin/sh\necho '${client} 9.8.7'\nCLI\nchmod 755 "$OPENSHELL_UPDATE_TARGET"`}\n`;
   await writeFile(join(tools, "curl"), `#!/bin/sh\ncat <<'INSTALL'\n${installer}INSTALL\n`);
   await chmod(join(tools, "curl"), 0o755);
-  await writeFile(join(tools, "npm"), `#!/bin/sh\nif [ "$1" = i ]; then\n  prefix=\n  previous=\n  for argument in "$@"; do\n    if [ "$previous" = --prefix ]; then prefix="$argument"; break; fi\n    previous="$argument"\n  done\n  [ -n "$prefix" ] || exit 64\n  mkdir -p "$prefix/bin"\n  cat >"$prefix/bin/codex" <<'CLI'\n#!/bin/sh\necho 'codex 9.8.7'\nCLI\n  chmod 755 "$prefix/bin/codex"\n  exit 0\nfi\nexit 64\n`);
+  const npmInstall = installerFails ? "  exit 23\\n" : `  prefix=\n  previous=\n  for argument in "$@"; do\n    if [ "$previous" = --prefix ]; then prefix="$argument"; break; fi\n    previous="$argument"\n  done\n  [ -n "$prefix" ] || exit 64\n  mkdir -p "$prefix/bin"\n  client=${JSON.stringify(client)}\n  cat >"$prefix/bin/$client" <<CLI\n#!/bin/sh\necho '$client 9.8.7'\nCLI\n  chmod 755 "$prefix/bin/$client"\n  exit 0\n`;
+  await writeFile(join(tools, "npm"), `#!/bin/sh\nif [ "$1" = i ]; then\n${npmInstall}fi\nexit 64\n`);
   await chmod(join(tools, "npm"), 0o755);
 
   return {
@@ -79,16 +80,18 @@ test("launcher is restored when the vendor installer fails", async () => {
   assert.equal(await readlink(f.target), f.launcher);
 });
 
-test("Codex is installed into a user-writable npm prefix", async () => {
-  const f = await fixture("codex");
-  const prefix = join(f.temp, "codex-npm");
-  await execFileAsync(updater, ["codex", "--launcher", f.launcher], {
-    env: { ...f.env, CODEX_NPM_PREFIX: prefix },
+for (const [client, prefixVariable] of [["pi", "PI_NPM_PREFIX"], ["codex", "CODEX_NPM_PREFIX"]]) {
+  test(`${client} is installed into a user-writable npm prefix`, async () => {
+    const f = await fixture(client);
+    const prefix = join(f.temp, `${client}-npm`);
+    await execFileAsync(updater, [client, "--launcher", f.launcher], {
+      env: { ...f.env, [prefixVariable]: prefix },
+    });
+    const binary = await readFile(join(prefix, "bin", client), "utf8");
+    assert.match(binary, new RegExp(`${client} 9\\.8\\.7`));
+    assert.equal((await lstat(f.target)).isSymbolicLink(), true);
   });
-  const binary = await readFile(join(prefix, "bin", "codex"), "utf8");
-  assert.match(binary, /codex 9\.8\.7/);
-  assert.equal((await lstat(f.target)).isSymbolicLink(), true);
-});
+}
 
 test("updater refuses a command that is not the expected OpenShell launcher", async () => {
   const f = await fixture("codex");
