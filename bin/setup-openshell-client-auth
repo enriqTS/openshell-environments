@@ -10,9 +10,6 @@ CODEX_CLIENT_ID="${CODEX_OAUTH_CLIENT_ID:-app_EMoamEEZ73f0CkXaXp7hrann}"
 
 require_openshell() {
   command -v openshell >/dev/null 2>&1 || { printf 'setup-openshell-client-auth: openshell CLI is not on PATH\n' >&2; exit 127; }
-  # This setup command is the user's explicit consent to enable provider profile
-  # composition; OpenShell otherwise rejects global updates without --yes.
-  openshell settings set --global --key providers_v2_enabled --value true --yes >/dev/null
 }
 
 install_profile() {
