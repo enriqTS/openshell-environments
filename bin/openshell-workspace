@@ -90,10 +90,20 @@ sandbox_workspace="/workspace/$(basename -- "$host_workspace")"
 sandbox_workdir="$sandbox_workspace$relative_workdir"
 project_name="$(basename -- "$host_workspace" | tr '[:upper:]' '[:lower:]' | tr -cs '[:lower:][:digit:]' '-' | sed 's/^-*//; s/-*$//')"
 project_name="${project_name:-workspace}"
-project_name="${project_name:0:8}"
 name_prefix="$(printf %s "$name_prefix" | tr -cs '[:lower:][:digit:]' '-' | sed 's/^-*//; s/-*$//' | cut -c1-5)"
 name_prefix="${name_prefix:-box}"
-sandbox_name="${recovery_sandbox:-${name_prefix}-${project_name}-$$}"
+# OpenShell limits sandbox names to 19 characters. Keep the full PID suffix
+# for collision resistance and fit the human-readable project component into
+# the remaining space instead of relying on a fixed project length.
+if [[ -z "$recovery_sandbox" ]]; then
+  sandbox_name_limit=19
+  project_name_limit=$((sandbox_name_limit - ${#name_prefix} - ${#BASHPID} - 2))
+  ((project_name_limit > 0)) || { printf 'openshell-workspace: cannot construct a sandbox name within %s characters\n' "$sandbox_name_limit" >&2; exit 1; }
+  project_name="${project_name:0:project_name_limit}"
+  sandbox_name="${name_prefix}-${project_name}-${BASHPID}"
+else
+  sandbox_name="$recovery_sandbox"
+fi
 
 sandbox_created=0
 tracked_manifest=""

@@ -13,7 +13,7 @@ const root = dirname(dirname(fileURLToPath(import.meta.url)));
 async function runLauncher(client, home, imageVariable) {
   const temp = await mkdtemp(join(tmpdir(), `${client}-openshell-`));
   const fakeBin = join(temp, "bin");
-  const workdir = join(temp, "project");
+  const workdir = join(temp, "openshell-environments");
   const log = join(temp, "openshell.log");
   await mkdir(fakeBin);
   await mkdir(workdir);
@@ -34,7 +34,11 @@ async function runLauncher(client, home, imageVariable) {
   });
 
   const calls = await readFile(log, "utf8");
-  assert.match(calls, new RegExp(`sandbox create --name ${client.slice(0, 5)}-project-\\d+ --from ${image.replaceAll("/", "\\/")}`));
+  const sandboxName = calls.match(/sandbox create --name (\S+)/)?.[1];
+  assert.ok(sandboxName);
+  assert.ok(sandboxName.length <= 19, `sandbox name exceeds OpenShell's limit: ${sandboxName}`);
+  assert.match(sandboxName, new RegExp(`^${client.slice(0, 5)}-[a-z0-9-]+-\\d+$`));
+  assert.match(calls, new RegExp(`sandbox create .* --from ${image.replaceAll("/", "\\/")}`));
   assert.match(calls, new RegExp(`sandbox exec .* --env HOME=${home} .* -- ${client} --version extra argument`));
   assert.match(calls, /sandbox download/);
   assert.match(calls, /sandbox delete/);

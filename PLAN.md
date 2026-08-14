@@ -6,6 +6,8 @@ Make the host `claude` and `codex` terminal commands automatically launch their 
 
 ### Active approach / progress
 
+- [x] Fixed the first real Claude launch failure: generated names could reach 20 characters while OpenShell accepts at most 19. The shared launcher now dynamically truncates only the project component while preserving the client prefix and full PID suffix.
+- [x] Added generated-name length coverage and re-ran all 32 tests; reviewed and ready to commit the fix.
 - [x] Confirmed `bin/openshell-workspace` already owns the required upload, sandbox, execution, download, and cleanup lifecycle.
 - [x] Reviewed the in-progress untracked `clients/claude/` and `clients/codex/` image/policy definitions; preserve them and integrate them rather than replacing them.
 - [x] Added and tested thin Claude/Codex launchers with explicit client `HOME`, versioned local image defaults, image overrides, argument forwarding, and retained-sandbox recovery options.

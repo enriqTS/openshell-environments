@@ -10,6 +10,8 @@ import { promisify } from "node:util";
 const execFileAsync = promisify(execFile);
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const launcher = join(root, "bin", "openshell-workspace");
+const launcherSource = await readFile(launcher, "utf8");
+
 
 test("recover-download prunes ignored artifacts and synchronizes a retained Git workspace", async () => {
   const temp = await mkdtemp(join(tmpdir(), "openshell-workspace-"));
@@ -54,6 +56,12 @@ esac
   const calls = await readFile(log, "utf8");
   assert.ok(calls.indexOf("git clean -fdX") < calls.indexOf("sandbox download test-project-123 /workspace/project"));
   assert.match(calls, /sandbox delete test-project-123/);
+});
+
+test("generated sandbox names fit OpenShell's 19-character limit", () => {
+  assert.match(launcherSource, /sandbox_name_limit=19/);
+  assert.match(launcherSource, /project_name_limit=\$\(\(sandbox_name_limit - \$\{#name_prefix\} - \$\{#BASHPID\} - 2\)\)/);
+  assert.match(launcherSource, /sandbox_name="\$\{name_prefix\}-\$\{project_name\}-\$\{BASHPID\}"/);
 });
 
 test("requires a full versioned image reference", async () => {
