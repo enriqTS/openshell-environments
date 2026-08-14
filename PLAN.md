@@ -53,10 +53,10 @@ Make `pi-customizations` completely unaware of OpenShell. The only dependency mu
 
 ### Phase 5 — Remove OpenShell from `pi-customizations`
 
-- [ ] Delete its OpenShell launchers, lifecycle hook, settings/session helpers, image entrypoint/patch, provider helper/profile, installers, environment pins, host export branch, host release workflow, and corresponding tests.
-- [ ] Remove or rewrite `OpenShell.md`, `OPENSHELL_MIGRATION_PLAN.md`, README sections, `PLAN.md`, and `MEMORY.md` so the repository no longer documents or assumes OpenShell.
-- [ ] Simplify `export-pi-release.mjs` to assets only and remove host compatibility/image-reference validation.
-- [ ] Confirm `rg -i 'openshell|pi-openshell'` has no implementation/configuration hits in `pi-customizations` (excluding immutable Git history).
+- [x] Delete its OpenShell launchers, lifecycle hook, settings/session helpers, image entrypoint/patch, provider helper/profile, installers, environment pins, host export branch, host release workflow, and corresponding tests (verified at `pi-customizations` commit `bbe283b`).
+- [x] Remove or rewrite `OpenShell.md`, `OPENSHELL_MIGRATION_PLAN.md`, README sections, `PLAN.md`, and `MEMORY.md` so the repository no longer documents or assumes OpenShell.
+- [x] Simplify `export-pi-release.mjs` to assets only and remove host compatibility/image-reference validation.
+- [x] Confirm `rg -i 'openshell|pi-openshell'` has no implementation/configuration hits in `pi-customizations` (excluding immutable Git history).
 
 ### Phase 6 — Release and acceptance
 
