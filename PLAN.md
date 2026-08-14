@@ -26,7 +26,7 @@ Make `pi-customizations` completely unaware of OpenShell. The only dependency mu
 ### Phase 1 — Freeze and map the current contract
 
 - [ ] Record the current published rollback chain (`pi-assets-v0.1.0`, environment `0.3.0`, and `pi-openshell-v0.2.0`) and do not move or delete those releases/tags.
-- [ ] Inventory every OpenShell-specific source, test, workflow, pin, and document in `pi-customizations`; use the inventory in the matching repository plan as the move checklist.
+- [x] Inventory every OpenShell-specific source, test, workflow, pin, and document in `pi-customizations`; the move/removal checklist is committed as `docs/pi-customizations-isolation-handoff.md` for the follow-up sandbox.
 - [ ] Define the new generic Pi asset manifest. It may contain only Pi resources and generic metadata; specifically exclude `pi-openshell-entrypoint`, `patch-pi-codex`, host integration, credentials, settings, and sessions.
 - [ ] Decide the new ownership/versioning of the host integration package under this repository without changing API 1 unless the archive schema itself must change.
 
