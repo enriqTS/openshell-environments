@@ -2,15 +2,80 @@
 
 ## Active objective
 
-Add host-side vendor CLI updates that run each vendor's official installer, resolve the installed version, rebuild the corresponding local OpenShell image with that exact version, and always restore the OpenShell command symlink if the installer replaces it.
+Make `pi-customizations` completely unaware of OpenShell. The only dependency must point from this repository to a generic, published `pi-customizations` asset archive: `openshell-environments` downloads that archive and owns everything required to build, install, configure, authenticate, update, and launch the Pi OpenShell client.
 
-### Active approach / progress
+## Target boundary
 
-- [x] Added a transactional shared updater for Pi, Claude, and Codex with fail-safe, atomic launcher restoration around the official vendor installers.
-- [x] Pinned image installation to the host-resolved vendor CLI version, verified the built image reports it, and recorded it in image metadata.
-- [x] Intercepted exact update commands in repository-owned launchers; `pi-customizations` now delegates exact `pi update` to the shared updater while preserving other update forms for the sandbox.
-- [x] Persisted the successfully rebuilt full local image reference under XDG config so the next launch selects it; explicit environment overrides remain higher priority.
-- [x] Added regression tests and usage/security documentation. All 47 tests pass; Docker image builds were not run because this sandbox has no Docker CLI.
+### `pi-customizations` retains
+
+- Generic Pi resources: `agents/`, `extensions/`, `skills/`, `themes/`, and `APPEND_SYSTEM.md`.
+- A generic deterministic asset exporter and `pi-assets-v<version>` release workflow.
+- Tests and documentation for those resources and the generic asset contract only.
+- No OpenShell names, paths, provider profiles, compatibility pins, launchers, hooks, installers, image helpers, or host-package releases.
+
+### `openshell-environments` owns
+
+- Pi Dockerfile/runtime helpers and all OpenShell-specific image behavior.
+- Host launchers, installer/package manager, update interception, image selection, recovery, and compatibility metadata.
+- Settings sanitization, project-session translation/synchronization, and workspace lifecycle hooks.
+- Gateway provider profiles, OAuth import/routing, opaque-handle materialization, and the Pi Codex account-ID patch.
+- Pi host-package and image release workflows, tests, security documentation, and version pins.
+
+## Migration plan
+
+### Phase 1 — Freeze and map the current contract
+
+- [ ] Record the current published rollback chain (`pi-assets-v0.1.0`, environment `0.3.0`, and `pi-openshell-v0.2.0`) and do not move or delete those releases/tags.
+- [ ] Inventory every OpenShell-specific source, test, workflow, pin, and document in `pi-customizations`; use the inventory in the matching repository plan as the move checklist.
+- [ ] Define the new generic Pi asset manifest. It may contain only Pi resources and generic metadata; specifically exclude `pi-openshell-entrypoint`, `patch-pi-codex`, host integration, credentials, settings, and sessions.
+- [ ] Decide the new ownership/versioning of the host integration package under this repository without changing API 1 unless the archive schema itself must change.
+
+### Phase 2 — Move image and runtime behavior here first
+
+- [ ] Copy `pi-openshell-entrypoint` and `patch-pi-codex` into `clients/pi/` and make the Pi Docker build use these local reviewed files rather than receiving them in `pi-assets`.
+- [ ] Update contracts/tests so a generic asset archive containing image or host helpers is rejected.
+- [ ] Consume a new generic `pi-assets` release and verify resource discovery, Codex routing, Terraform guard behavior, and restricted-PATH toolchain behavior.
+- [ ] Keep temporary compatibility with the old asset archive only on the rollback release line; do not maintain dual ownership on the new line.
+
+### Phase 3 — Move all Pi host/client integration here
+
+- [ ] Move the development and packaged Pi launchers, workspace hook, settings sanitizer, session translator, provider helper/profile, and installer into `clients/pi/`, `bin/`, or `lib/` as appropriate.
+- [ ] Make exact `pi update` call the already-local `bin/update-openshell-client`; keep forms such as `pi update --models` inside the sandbox.
+- [ ] Preserve XDG installation, atomic launcher/image selection, current-project-only sessions, settings allowlisting, recovery, provider isolation, and raw-secret exclusion.
+- [ ] Move all corresponding unit/integration tests before removing their originals.
+
+### Phase 4 — Move release production and installation here
+
+- [ ] Produce and publish the Pi host integration package from this repository, using this repository's compatibility contracts and environment/image release metadata.
+- [ ] Move the `pi-openshell` release workflow, environment pinning, checksum/provenance validation, and installer lifecycle tests here.
+- [ ] Ensure the host package contains no path or runtime dependency on a `pi-customizations` checkout; its only customization dependency is the asset identity already embedded in the selected image.
+- [ ] Provide an atomic migration from an installed package published by `pi-customizations` to the new package without overwriting unrelated commands or deleting retained sandboxes.
+
+### Phase 5 — Remove OpenShell from `pi-customizations`
+
+- [ ] Delete its OpenShell launchers, lifecycle hook, settings/session helpers, image entrypoint/patch, provider helper/profile, installers, environment pins, host export branch, host release workflow, and corresponding tests.
+- [ ] Remove or rewrite `OpenShell.md`, `OPENSHELL_MIGRATION_PLAN.md`, README sections, `PLAN.md`, and `MEMORY.md` so the repository no longer documents or assumes OpenShell.
+- [ ] Simplify `export-pi-release.mjs` to assets only and remove host compatibility/image-reference validation.
+- [ ] Confirm `rg -i 'openshell|pi-openshell'` has no implementation/configuration hits in `pi-customizations` (excluding immutable Git history).
+
+### Phase 6 — Release and acceptance
+
+- [ ] Publish a new generic `pi-assets` release, then pin it in `clients/pi/pi-assets.version` and publish a new signed/attested environment image.
+- [ ] Publish/install the new environment-owned host package and confirm `pi`, `pi update`, rollback, and uninstall behavior from a clean machine with no `pi-customizations` checkout.
+- [ ] Re-run settings/session isolation, provider routing, Terraform guard, network policy, Git synchronization, recovery, launcher-restoration, and image-version tests.
+- [ ] Verify the dependency graph is one-way: this repository may download `pi-customizations` assets; `pi-customizations` never downloads, invokes, names, or packages this repository.
+
+## Rollback
+
+- Preserve all existing published artifacts and the currently installed package until the new clean-machine acceptance passes.
+- Copy behavior and tests here before deleting the source from `pi-customizations`.
+- If migration fails, reactivate `pi-openshell-v0.2.0` with environment `0.3.0`; do not create a mixed package with helpers split across repositories.
+
+## Completion criteria
+
+- `pi-customizations` publishes only generic Pi resources and has no OpenShell-specific files or configuration.
+- This repository independently builds and ships the complete Pi OpenShell image and host integration using only the published generic asset archive.
+- A clean host can install, launch, update, recover, and uninstall Pi without cloning `pi-customizations`, while all existing security and synchronization guarantees remain intact.
 
 ### Prior launcher work
 
