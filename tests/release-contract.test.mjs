@@ -60,6 +60,16 @@ function rejected(mutate, validator, value, pattern) {
   assert.match(validator(value).join("\n"), pattern);
 }
 
+test("host release generation stays in a gitignored staging directory", async () => {
+  const [ignore, workflow] = await Promise.all([
+    readFile(new URL("../.gitignore", import.meta.url), "utf8"),
+    readFile(new URL("../.github/workflows/release-pi-openshell.yml", import.meta.url), "utf8"),
+  ]);
+  assert.match(ignore, /^dist\/$/m);
+  assert.match(workflow, /dist\/assets/);
+  assert.match(workflow, /dist\/compatibility\.json/);
+});
+
 test("contract schemas are valid JSON and pin API 1", async () => {
   const names = ["pi-assets", "pi-host-integration", "pi-release"];
   const schemas = await Promise.all(names.map(async (name) => JSON.parse(await readFile(new URL(`../contracts/${name}.schema.json`, import.meta.url)))));
