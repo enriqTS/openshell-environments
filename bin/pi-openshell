@@ -7,6 +7,9 @@ BACKEND_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/openshell-clients/pi.backend"
 
 if [[ "${1:-}" == update && $# -eq 1 ]]; then
   exec "$ROOT/bin/update-openshell-client" pi --launcher "$SCRIPT_PATH"
+elif [[ "${1:-}" == direct ]]; then
+  shift
+  exec "$ROOT/bin/openshell-client-direct" pi "$@"
 fi
 
 [[ -f "$BACKEND_FILE" && ! -L "$BACKEND_FILE" ]] || {

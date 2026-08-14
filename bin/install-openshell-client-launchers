@@ -40,33 +40,11 @@ uninstall_launcher() {
   fi
 }
 
-check_direct_target() {
-  local client="$1" source="$ROOT/bin/openshell-client-direct" target="$BIN_DIR/$1-direct"
-  if [[ -e "$target" || -L "$target" ]]; then
-    [[ -L "$target" && "$(readlink -f -- "$target")" == "$source" ]] && return
-    printf 'install-openshell-client-launchers: refusing to replace existing path: %s\n' "$target" >&2
-    exit 1
-  fi
-}
-
-install_direct_launcher() {
-  local client="$1" source="$ROOT/bin/openshell-client-direct" target="$BIN_DIR/$1-direct"
-  if [[ -L "$target" ]]; then
-    printf '%s-direct already launches the host CLI: %s\n' "$client" "$target"
-  else
-    ln -s -- "$source" "$target"
-    printf 'installed %s -> %s\n' "$target" "$source"
-  fi
-}
-
-uninstall_direct_launcher() {
+remove_legacy_direct_alias() {
   local client="$1" source="$ROOT/bin/openshell-client-direct" target="$BIN_DIR/$1-direct"
   if [[ -L "$target" && "$(readlink -f -- "$target")" == "$source" ]]; then
     rm -- "$target"
-    printf 'removed %s\n' "$target"
-  elif [[ -e "$target" || -L "$target" ]]; then
-    printf 'install-openshell-client-launchers: refusing to remove unrelated path: %s\n' "$target" >&2
-    exit 1
+    printf 'removed obsolete %s\n' "$target"
   fi
 }
 
@@ -111,17 +89,16 @@ case "$action" in
     mkdir -p -- "$BIN_DIR"
     check_install_target claude
     check_install_target codex
-    for client in pi claude codex; do check_direct_target "$client"; done
+    for client in pi claude codex; do remove_legacy_direct_alias "$client"; done
     install_pi_update_shim
     install_launcher claude
     install_launcher codex
-    for client in pi claude codex; do install_direct_launcher "$client"; done
     ;;
   uninstall)
+    for client in pi claude codex; do remove_legacy_direct_alias "$client"; done
     uninstall_pi_update_shim
     uninstall_launcher claude
     uninstall_launcher codex
-    for client in pi claude codex; do uninstall_direct_launcher "$client"; done
     ;;
   *)
     printf 'usage: install-openshell-client-launchers [install|uninstall]\n' >&2

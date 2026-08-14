@@ -31,7 +31,7 @@ bin/openshell-image build codex
 bin/install-openshell-client-launchers install
 ```
 
-`${XDG_BIN_HOME:-$HOME/.local/bin}` must precede native installations on `PATH`. The installer refuses to replace unrelated paths. It also installs `pi-direct`, `claude-direct`, and `codex-direct`, which execute the native host CLIs without OpenShell; updates record the exact native executable for these commands. For Pi migration, it accepts only an existing packaged `${XDG_DATA_HOME:-$HOME/.local/share}/pi-openshell/<version>/bin/pi` symlink, records that launcher as the normal-command backend, and installs a checkout shim that intercepts only exact `pi update`; uninstall atomically restores the packaged Pi symlink. Use `bin/install-openshell-client-launchers uninstall` to remove only links owned by this checkout.
+`${XDG_BIN_HOME:-$HOME/.local/bin}` must precede native installations on `PATH`. The installer refuses to replace unrelated paths. Each launcher accepts a `direct` subcommand (`pi direct`, `claude direct`, or `codex direct`) which executes the native host CLI without OpenShell; updates record the exact native executable for this route. For Pi migration, it accepts only an existing packaged `${XDG_DATA_HOME:-$HOME/.local/share}/pi-openshell/<version>/bin/pi` symlink, records that launcher as the normal-command backend, and installs a checkout shim that intercepts only exact `pi update`; uninstall atomically restores the packaged Pi symlink. Use `bin/install-openshell-client-launchers uninstall` to remove only links owned by this checkout.
 
 Update a vendor CLI and rebuild its local image with the normal command:
 
@@ -41,9 +41,9 @@ claude update
 codex update
 
 # Explicitly bypass OpenShell and run on the host
-pi-direct --version
-claude-direct --version
-codex-direct --version
+pi direct --version
+claude direct --version
+codex direct --version
 ```
 
 Exact update commands run on the host, not in a sandbox. The shared updater temporarily removes the verified OpenShell command symlink, updates Pi and Codex in npm's configured global host installation, runs Claude's official installer (`claude.ai/install.sh`), reads the installed version, atomically restores the same launcher even on failure, and builds the image with that exact version. If npm's global prefix is protected (for example `/usr`), Pi/Codex updates invoke `sudo` and show the normal administrator password prompt. Other Pi forms such as `pi update --models` continue into the sandbox. The compatible Pi launcher in `pi-customizations` owns the `pi update` delegation.
@@ -53,7 +53,7 @@ If an update prints only vendor-installer output and not `updated … and rebuil
 These launchers reuse Pi's workspace/Git lifecycle and can retain authentication through gateway providers even though every successful sandbox is deleted. Configure them once after logging in with the preserved direct CLIs:
 
 ```bash
-bin/setup-openshell-client-auth claude   # prompts for `claude-direct setup-token` output
+bin/setup-openshell-client-auth claude   # prompts for `claude direct setup-token` output
 bin/setup-openshell-client-auth codex    # imports host ~/.codex/auth.json into gateway storage
 ```
 

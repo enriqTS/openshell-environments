@@ -54,7 +54,7 @@ setup_claude() {
   local token="${CLAUDE_CODE_OAUTH_TOKEN:-}"
   if [[ -z "$token" ]]; then
     [[ -t 0 ]] || { printf 'setup-openshell-client-auth: set CLAUDE_CODE_OAUTH_TOKEN or run interactively\n' >&2; exit 1; }
-    printf 'Run `claude-direct setup-token` in another terminal if you do not have a setup token.\n' >&2
+    printf 'Run `claude direct setup-token` in another terminal if you do not have a setup token.\n' >&2
     read -r -s -p 'Claude setup token: ' token
     printf '\n' >&2
   fi
@@ -74,7 +74,7 @@ setup_claude() {
 
 setup_codex() {
   local auth_file="${CODEX_HOST_AUTH_FILE:-${CODEX_HOME:-$HOME/.codex}/auth.json}"
-  [[ -f "$auth_file" ]] || { printf 'setup-openshell-client-auth: Codex auth is missing: %s (run codex-direct login)\n' "$auth_file" >&2; exit 1; }
+  [[ -f "$auth_file" ]] || { printf 'setup-openshell-client-auth: Codex auth is missing: %s (run codex direct login)\n' "$auth_file" >&2; exit 1; }
   local -a encoded
   mapfile -t encoded < <(node - "$auth_file" <<'NODE'
 const fs = require("fs");

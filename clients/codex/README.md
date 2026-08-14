@@ -22,7 +22,7 @@ bin/install-openshell-client-launchers install
 Log in once with the preserved host CLI, then import that login into gateway credential storage:
 
 ```bash
-codex-direct login
+codex direct login
 bin/setup-openshell-client-auth codex
 ```
 

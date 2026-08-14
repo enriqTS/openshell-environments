@@ -24,7 +24,7 @@ bin/install-openshell-client-launchers install
 Generate a long-lived Claude setup token with the preserved host CLI, then store it in the gateway provider. The setup command prompts without echoing or writing the token to shell history:
 
 ```bash
-claude-direct setup-token
+claude direct setup-token
 bin/setup-openshell-client-auth claude
 ```
 
