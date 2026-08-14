@@ -6,6 +6,8 @@ Make the host `claude` and `codex` terminal commands automatically launch their 
 
 ### Active approach / progress
 
+- [x] Fixed launcher argument-forwarding assertions by placing `--tty` after explicit exec environment flags; this preserves OpenShell option semantics and provides a delimiter-safe option between `HOME` and the command separator.
+- [x] Ran all 40 tests and reviewed the launcher regression fix; ready to commit.
 - [x] Fixed the second real Claude launch failure: Claude Code requires its npm postinstall to install/activate the native binary, so its image no longer uses `--ignore-scripts`; added a regression assertion.
 - [x] Diagnosed Claude's login 403 against upstream OpenShell examples: `platform.claude.com` must use opaque TLS rather than REST/TLS interception. Switched both interactive-login client policies to L4 public HTTPS while retaining the same destination/port limits; provider-specific L7 layers remain possible.
 - [x] Clarified that Codex's missing-system-bubblewrap message is informational because it uses its bundled fallback and OpenShell remains the outer sandbox; do not broaden policy for nested sandboxing.
