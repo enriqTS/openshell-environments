@@ -5,6 +5,8 @@ SCRIPT_PATH="$(readlink -f -- "${BASH_SOURCE[0]}")"
 ROOT="$(cd -- "$(dirname -- "$SCRIPT_PATH")/.." && pwd -P)"
 action="${1:-install}"
 BIN_DIR="${OPENSHELL_CLIENT_BIN_DIR:-${XDG_BIN_HOME:-$HOME/.local/bin}}"
+CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/openshell-clients"
+DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
 
 check_install_target() {
   local client="$1" source="$ROOT/bin/$1-openshell" target="$BIN_DIR/$1"
@@ -38,15 +40,53 @@ uninstall_launcher() {
   fi
 }
 
+install_pi_update_shim() {
+  local source="$ROOT/bin/pi-openshell" target="$BIN_DIR/pi" backend backend_file="$CONFIG_DIR/pi.backend" replacement
+  if [[ -L "$target" && "$(readlink -f -- "$target")" == "$source" ]]; then
+    printf 'pi already launches OpenShell: %s\n' "$target"
+    return
+  fi
+  [[ -L "$target" ]] || { printf 'install-openshell-client-launchers: refusing to replace existing path: %s\n' "$target" >&2; exit 1; }
+  backend="$(readlink -f -- "$target")"
+  case "$backend" in
+    "$DATA_HOME"/pi-openshell/*/bin/pi) ;;
+    *) printf 'install-openshell-client-launchers: refusing non-package Pi launcher: %s\n' "$backend" >&2; exit 1 ;;
+  esac
+  [[ -f "$backend" && ! -L "$backend" && -x "$backend" ]] || { printf 'install-openshell-client-launchers: invalid Pi launcher: %s\n' "$backend" >&2; exit 1; }
+  mkdir -p -- "$CONFIG_DIR"
+  printf '%s\n' "$backend" >"$backend_file.tmp.$$"
+  mv -f -- "$backend_file.tmp.$$" "$backend_file"
+  replacement="$BIN_DIR/.pi.openshell.$$"
+  ln -s -- "$source" "$replacement"
+  mv -Tf -- "$replacement" "$target"
+  printf 'installed %s -> %s (delegating normal commands to %s)\n' "$target" "$source" "$backend"
+}
+
+uninstall_pi_update_shim() {
+  local source="$ROOT/bin/pi-openshell" target="$BIN_DIR/pi" backend_file="$CONFIG_DIR/pi.backend" backend replacement
+  [[ -L "$target" && "$(readlink -f -- "$target")" == "$source" ]] || return 0
+  [[ -f "$backend_file" && ! -L "$backend_file" ]] || { printf 'install-openshell-client-launchers: Pi backend is missing: %s\n' "$backend_file" >&2; exit 1; }
+  IFS= read -r backend <"$backend_file" || true
+  case "$backend" in "$DATA_HOME"/pi-openshell/*/bin/pi) ;; *) printf 'install-openshell-client-launchers: invalid Pi backend: %s\n' "$backend" >&2; exit 1;; esac
+  [[ -f "$backend" && ! -L "$backend" && -x "$backend" ]] || { printf 'install-openshell-client-launchers: invalid Pi backend: %s\n' "$backend" >&2; exit 1; }
+  replacement="$BIN_DIR/.pi.backend.$$"
+  ln -s -- "$backend" "$replacement"
+  mv -Tf -- "$replacement" "$target"
+  rm -- "$backend_file"
+  printf 'restored %s -> %s\n' "$target" "$backend"
+}
+
 case "$action" in
   install)
     mkdir -p -- "$BIN_DIR"
     check_install_target claude
     check_install_target codex
+    install_pi_update_shim
     install_launcher claude
     install_launcher codex
     ;;
   uninstall)
+    uninstall_pi_update_shim
     uninstall_launcher claude
     uninstall_launcher codex
     ;;

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { chmod, lstat, mkdtemp, mkdir, readFile, readlink, writeFile } from "node:fs/promises";
+import { chmod, lstat, mkdtemp, mkdir, readFile, readlink, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -29,6 +29,7 @@ async function runLauncher(client, home, imageVariable) {
       ...process.env,
       PATH: `${fakeBin}:${process.env.PATH}`,
       FAKE_LOG: log,
+      [`${client.toUpperCase()}_OPENSHELL_PROVIDER`]: "none",
       [imageVariable]: image,
     },
   });
@@ -100,21 +101,43 @@ test("launchers attach configured gateway providers", async () => {
   }
 });
 
-test("launcher installer exposes and safely removes claude and codex commands", async () => {
+test("launcher installer exposes all clients and safely restores packaged Pi", async () => {
   const temp = await mkdtemp(join(tmpdir(), "openshell-client-bin-"));
+  const dataHome = join(temp, "data");
+  const binHome = join(temp, "bin");
+  const packagedPi = join(dataHome, "pi-openshell", "0.2.0", "bin", "pi");
   const installer = join(root, "bin", "install-openshell-client-launchers");
-  const env = { ...process.env, OPENSHELL_CLIENT_BIN_DIR: temp };
+  await mkdir(dirname(packagedPi), { recursive: true });
+  await mkdir(binHome);
+  await writeFile(packagedPi, "#!/bin/sh\nexit 0\n");
+  await chmod(packagedPi, 0o755);
+  await symlink(packagedPi, join(binHome, "pi"));
+  const env = {
+    ...process.env,
+    OPENSHELL_CLIENT_BIN_DIR: binHome,
+    XDG_CONFIG_HOME: join(temp, "config"),
+    XDG_DATA_HOME: dataHome,
+  };
 
   await execFileAsync(installer, ["install"], { env });
-  for (const client of ["claude", "codex"]) {
-    assert.equal((await lstat(join(temp, client))).isSymbolicLink(), true);
-    assert.equal(await readlink(join(temp, client)), join(root, "bin", `${client}-openshell`));
+  for (const client of ["pi", "claude", "codex"]) {
+    assert.equal((await lstat(join(binHome, client))).isSymbolicLink(), true);
+    assert.equal(await readlink(join(binHome, client)), join(root, "bin", `${client}-openshell`));
   }
+  assert.equal(await readFile(join(temp, "config", "openshell-clients", "pi.backend"), "utf8"), `${packagedPi}\n`);
 
   await execFileAsync(installer, ["uninstall"], { env });
+  assert.equal(await readlink(join(binHome, "pi")), packagedPi);
   for (const client of ["claude", "codex"]) {
-    await assert.rejects(lstat(join(temp, client)), { code: "ENOENT" });
+    await assert.rejects(lstat(join(binHome, client)), { code: "ENOENT" });
   }
+});
+
+test("Pi shim intercepts only exact update and delegates normal commands", async () => {
+  const source = await readFile(join(root, "bin", "pi-openshell"), "utf8");
+  assert.match(source, /"\$\{1:-\}" == update && \$# -eq 1/);
+  assert.match(source, /update-openshell-client" pi --launcher "\$SCRIPT_PATH"/);
+  assert.match(source, /exec "\$backend" "\$@"/);
 });
 
 test("launcher installer does not replace an existing command", async () => {

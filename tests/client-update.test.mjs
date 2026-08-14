@@ -30,9 +30,11 @@ async function fixture(client, { buildFails = false, installerFails = false } = 
   const installer = `#!/bin/sh\n${installerFails ? "exit 23" : `cat >"$OPENSHELL_UPDATE_TARGET" <<'CLI'\n#!/bin/sh\necho '${client} 9.8.7'\nCLI\nchmod 755 "$OPENSHELL_UPDATE_TARGET"`}\n`;
   await writeFile(join(tools, "curl"), `#!/bin/sh\ncat <<'INSTALL'\n${installer}INSTALL\n`);
   await chmod(join(tools, "curl"), 0o755);
-  const npmInstall = installerFails ? "  exit 23\\n" : `  prefix=\n  previous=\n  for argument in "$@"; do\n    if [ "$previous" = --prefix ]; then prefix="$argument"; break; fi\n    previous="$argument"\n  done\n  [ -n "$prefix" ] || exit 64\n  mkdir -p "$prefix/bin"\n  client=${JSON.stringify(client)}\n  cat >"$prefix/bin/$client" <<CLI\n#!/bin/sh\necho '$client 9.8.7'\nCLI\n  chmod 755 "$prefix/bin/$client"\n  exit 0\n`;
-  await writeFile(join(tools, "npm"), `#!/bin/sh\nif [ "$1" = i ]; then\n${npmInstall}fi\nexit 64\n`);
+  const npmInstall = installerFails ? "  exit 23\n" : `  mkdir -p "$FAKE_NPM_PREFIX/bin"\n  client=${JSON.stringify(client)}\n  cat >"$FAKE_NPM_PREFIX/bin/$client" <<CLI\n#!/bin/sh\necho '$client 9.8.7'\nCLI\n  chmod 755 "$FAKE_NPM_PREFIX/bin/$client"\n  exit 0\n`;
+  await writeFile(join(tools, "npm"), `#!/bin/sh\nif [ "$1 $2" = "prefix -g" ]; then printf '%s\\n' "$FAKE_NPM_PREFIX"; exit 0; fi\nif [ "$1" = i ]; then\n${npmInstall}fi\nexit 64\n`);
   await chmod(join(tools, "npm"), 0o755);
+  await writeFile(join(tools, "sudo"), "#!/bin/sh\nprintf '%s\\n' \"$*\" >\"$SUDO_LOG\"\n[ \"$1\" = -- ] && shift\nexec \"$@\"\n");
+  await chmod(join(tools, "sudo"), 0o755);
 
   return {
     temp,
@@ -48,6 +50,8 @@ async function fixture(client, { buildFails = false, installerFails = false } = 
       OPENSHELL_IMAGE_TOOL: join(tools, "image-tool"),
       XDG_CONFIG_HOME: join(temp, "config"),
       XDG_DATA_HOME: join(temp, "data"),
+      FAKE_NPM_PREFIX: join(temp, "npm-global"),
+      SUDO_LOG: join(temp, "sudo.log"),
       IMAGE_LOG: imageLog,
     },
   };
@@ -80,18 +84,26 @@ test("launcher is restored when the vendor installer fails", async () => {
   assert.equal(await readlink(f.target), f.launcher);
 });
 
-for (const [client, prefixVariable] of [["pi", "PI_NPM_PREFIX"], ["codex", "CODEX_NPM_PREFIX"]]) {
-  test(`${client} is installed into a user-writable npm prefix`, async () => {
+for (const client of ["pi", "codex"]) {
+  test(`${client} updates the host-global npm installation`, async () => {
     const f = await fixture(client);
-    const prefix = join(f.temp, `${client}-npm`);
-    await execFileAsync(updater, [client, "--launcher", f.launcher], {
-      env: { ...f.env, [prefixVariable]: prefix },
-    });
-    const binary = await readFile(join(prefix, "bin", client), "utf8");
+    await mkdir(f.env.FAKE_NPM_PREFIX);
+    await execFileAsync(updater, [client, "--launcher", f.launcher], { env: f.env });
+    const binary = await readFile(join(f.env.FAKE_NPM_PREFIX, "bin", client), "utf8");
     assert.match(binary, new RegExp(`${client} 9\\.8\\.7`));
     assert.equal((await lstat(f.target)).isSymbolicLink(), true);
   });
 }
+
+test("a protected global npm prefix prompts through sudo", async () => {
+  const f = await fixture("pi");
+  await execFileAsync(updater, ["pi", "--launcher", f.launcher], {
+    env: { ...f.env, OPENSHELL_UPDATE_FORCE_SUDO: "1" },
+  });
+  const invocation = await readFile(f.env.SUDO_LOG, "utf8");
+  assert.match(invocation, /-- .*npm i -g --ignore-scripts --min-release-age=0 @earendil-works\/pi-coding-agent/);
+  assert.equal((await lstat(f.target)).isSymbolicLink(), true);
+});
 
 test("updater refuses a command that is not the expected OpenShell launcher", async () => {
   const f = await fixture("codex");

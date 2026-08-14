@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+SCRIPT_PATH="$(readlink -f -- "${BASH_SOURCE[0]}")"
+ROOT="$(cd -- "$(dirname -- "$SCRIPT_PATH")/.." && pwd -P)"
+BACKEND_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/openshell-clients/pi.backend"
+
+if [[ "${1:-}" == update && $# -eq 1 ]]; then
+  exec "$ROOT/bin/update-openshell-client" pi --launcher "$SCRIPT_PATH"
+fi
+
+[[ -f "$BACKEND_FILE" && ! -L "$BACKEND_FILE" ]] || {
+  printf 'pi-openshell: installed Pi backend is missing; rerun: %s/bin/install-openshell-client-launchers install\n' "$ROOT" >&2
+  exit 1
+}
+IFS= read -r backend <"$BACKEND_FILE" || true
+[[ "$backend" == /* && -x "$backend" && ! -L "$backend" && "$(readlink -f -- "$backend")" != "$SCRIPT_PATH" ]] || {
+  printf 'pi-openshell: refusing invalid Pi backend: %s\n' "$backend" >&2
+  exit 1
+}
+exec "$backend" "$@"

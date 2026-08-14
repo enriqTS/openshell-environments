@@ -111,10 +111,10 @@ test("Pi installs only the sanitized asset archive into standard resource paths"
 
 test("host updates use official installers and restore OpenShell launchers", () => {
   assert.match(updater, /https:\/\/claude\.ai\/install\.sh/);
-  assert.match(updater, /i -g --ignore-scripts --prefix "\$npm_prefix" "\$\{PI_NPM_PACKAGE:-@earendil-works\/pi-coding-agent\}"/);
-  assert.match(updater, /PI_NPM_PREFIX:-\$\{XDG_DATA_HOME:-\$HOME\/\.local\/share\}\/openshell-clients\/pi\/npm/);
-  assert.match(updater, /i -g --prefix "\$npm_prefix" "\$\{CODEX_NPM_PACKAGE:-@openai\/codex\}"/);
-  assert.match(updater, /CODEX_NPM_PREFIX:-\$\{XDG_DATA_HOME:-\$HOME\/\.local\/share\}\/openshell-clients\/codex\/npm/);
+  assert.match(updater, /install_global_npm_package "\$\{PI_NPM_PACKAGE:-@earendil-works\/pi-coding-agent\}" --ignore-scripts --min-release-age=0/);
+  assert.match(updater, /install_global_npm_package "\$\{CODEX_NPM_PACKAGE:-@openai\/codex\}"/);
+  assert.match(updater, /npm_prefix="\$\(\$npm_executable prefix -g\)"/);
+  assert.match(updater, /sudo -- "\$npm_executable" i -g/);
   assert.match(updater, /trap restore_launcher EXIT HUP INT TERM/);
   assert.match(updater, /mv -Tf -- "\$replacement" "\$target"/);
   assert.match(updater, /config_dir="\$\{XDG_CONFIG_HOME:-\$HOME\/\.config\}\/openshell-clients"/);

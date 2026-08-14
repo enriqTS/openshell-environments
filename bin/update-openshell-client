@@ -45,22 +45,40 @@ restore_needed=1
 export OPENSHELL_UPDATE_TARGET="$target"
 
 npm_prefix=""
+install_global_npm_package() {
+  local package="$1"
+  shift
+  local npm_command="${NPM:-npm}" npm_executable
+  npm_executable="$(command -v -- "$npm_command")" || {
+    printf 'update-openshell-client: npm is required\n' >&2
+    exit 127
+  }
+  npm_prefix="$($npm_executable prefix -g)"
+  [[ -n "$npm_prefix" && "$npm_prefix" == /* ]] || {
+    printf 'update-openshell-client: npm returned an invalid global prefix: %s\n' "$npm_prefix" >&2
+    exit 1
+  }
+  if [[ -w "$npm_prefix" && "${OPENSHELL_UPDATE_FORCE_SUDO:-0}" != 1 ]]; then
+    "$npm_executable" i -g "$@" "$package"
+  else
+    command -v sudo >/dev/null 2>&1 || {
+      printf 'update-openshell-client: sudo is required to update the global npm installation at %s\n' "$npm_prefix" >&2
+      exit 127
+    }
+    printf 'update-openshell-client: administrator access is required to update %s under %s\n' "$client" "$npm_prefix" >&2
+    sudo -- "$npm_executable" i -g "$@" "$package"
+  fi
+}
+
 case "$client" in
   pi)
-    # The curl installer delegates to npm's global prefix, which can be a
-    # read-only system installation. Install the documented npm package into
-    # an XDG-owned prefix instead.
-    npm_prefix="${PI_NPM_PREFIX:-${XDG_DATA_HOME:-$HOME/.local/share}/openshell-clients/pi/npm}"
-    "${NPM:-npm}" i -g --ignore-scripts --prefix "$npm_prefix" "${PI_NPM_PACKAGE:-@earendil-works/pi-coding-agent}"
+    install_global_npm_package "${PI_NPM_PACKAGE:-@earendil-works/pi-coding-agent}" --ignore-scripts --min-release-age=0
     ;;
   claude)
     "${CURL:-curl}" -fsSL "${CLAUDE_INSTALLER_URL:-https://claude.ai/install.sh}" | bash
     ;;
   codex)
-    # A system npm prefix is normally root-owned. Keep the vendor installation
-    # user-owned, while the public command remains this restored launcher.
-    npm_prefix="${CODEX_NPM_PREFIX:-${XDG_DATA_HOME:-$HOME/.local/share}/openshell-clients/codex/npm}"
-    "${NPM:-npm}" i -g --prefix "$npm_prefix" "${CODEX_NPM_PACKAGE:-@openai/codex}"
+    install_global_npm_package "${CODEX_NPM_PACKAGE:-@openai/codex}"
     ;;
 esac
 

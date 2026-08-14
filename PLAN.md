@@ -6,8 +6,9 @@ Make `pi-customizations` completely unaware of OpenShell. The only dependency mu
 
 ### Current maintenance
 
-- [x] Make Pi and Codex vendor updates use user-owned npm prefixes rather than the non-writable system global prefix; regression coverage verifies the installed binaries and launcher restoration.
-- [x] Ran `npm test` (55/55), reviewed the diff, and committed the Pi update maintenance fix.
+- [x] Correct Pi/Codex semantics to update npm's actual global host installation; protected prefixes use a normal interactive `sudo` password prompt before rebuilding the image.
+- [x] Add a safe local migration shim so exact `pi update` reaches the host updater while all other commands continue through the old packaged 0.2.0 launcher; uninstall restores it atomically.
+- [x] Ran `npm test` (57/57), shell syntax checks, and diff validation; reviewed and committed the global-host update fix.
 
 ## Target boundary
 
