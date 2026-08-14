@@ -18,13 +18,13 @@ async function fakeEnvironment() {
   const log = join(temp, "openshell.log");
   await mkdir(fakeBin);
   const openshell = join(fakeBin, "openshell");
-  await writeFile(openshell, `#!/usr/bin/env bash\nset -euo pipefail\nprintf '%s\\n' "$*" >>"$FAKE_LOG"\n[[ "$1 $2 $3" == "provider profile export" ]] && exit 1\n[[ "$1 $2" == "provider get" ]] && exit 1\nexit 0\n`);
+  await writeFile(openshell, `#!/usr/bin/env bash\nset -euo pipefail\nprintf '%s\\n' "$*" >>"$FAKE_LOG"\n[[ "$1 $2 $3" == "provider profile export" ]] && exit 1\nif [[ "$1 $2" == "provider delete" ]]; then touch "$FAKE_PROVIDER_DELETED"; exit 0; fi\nif [[ "$1 $2" == "provider get" ]]; then\n  [[ "\${FAKE_PROVIDER_EXISTS:-}" == 1 && ! -e "$FAKE_PROVIDER_DELETED" ]] && exit 0 || exit 1\nfi\nexit 0\n`);
   await chmod(openshell, 0o755);
   return {
     temp,
     config,
     log,
-    env: { ...process.env, PATH: `${fakeBin}:${process.env.PATH}`, XDG_CONFIG_HOME: config, FAKE_LOG: log },
+    env: { ...process.env, PATH: `${fakeBin}:${process.env.PATH}`, XDG_CONFIG_HOME: config, FAKE_LOG: log, FAKE_PROVIDER_DELETED: join(temp, "provider-deleted") },
   };
 }
 
@@ -40,6 +40,17 @@ test("Claude auth setup stores its OAuth token only in the gateway provider", as
   assert.match(calls, /provider create --name claude-openshell --type claude-openshell-oauth --credential CLAUDE_CODE_OAUTH_TOKEN/);
   assert.doesNotMatch(calls, new RegExp(token));
   assert.doesNotMatch(await readFile(join(fixture.config, "openshell-clients", "claude.provider"), "utf8"), /secret/);
+});
+
+test("Claude auth setup can replace a provider created with the wrong token", async () => {
+  const fixture = await fakeEnvironment();
+  await execFileAsync(setup, ["claude", "--replace"], {
+    env: { ...fixture.env, FAKE_PROVIDER_EXISTS: "1", CLAUDE_CODE_OAUTH_TOKEN: "replacement-token" },
+  });
+  const calls = await readFile(fixture.log, "utf8");
+  assert.match(calls, /provider delete claude-openshell/);
+  assert.match(calls, /provider create --name claude-openshell --type claude-openshell-oauth/);
+  assert.doesNotMatch(calls, /provider update claude-openshell/);
 });
 
 test("Codex auth setup imports host tokens into a refresh-capable gateway provider", async () => {

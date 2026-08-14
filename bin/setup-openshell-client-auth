@@ -7,6 +7,7 @@ CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/openshell-clients"
 CLAUDE_PROVIDER="${CLAUDE_OPENSHELL_PROVIDER_NAME:-claude-openshell}"
 CODEX_PROVIDER="${CODEX_OPENSHELL_PROVIDER_NAME:-codex-openshell}"
 CODEX_CLIENT_ID="${CODEX_OAUTH_CLIENT_ID:-app_EMoamEEZ73f0CkXaXp7hrann}"
+REPLACE=0
 
 require_openshell() {
   command -v openshell >/dev/null 2>&1 || { printf 'setup-openshell-client-auth: openshell CLI is not on PATH\n' >&2; exit 127; }
@@ -19,6 +20,13 @@ install_profile() {
     openshell provider profile update "$id" -f "$file" >/dev/null
   else
     openshell provider profile import -f "$file" >/dev/null
+  fi
+}
+
+replace_provider_if_requested() {
+  local provider="$1"
+  if ((REPLACE)) && openshell provider get "$provider" >/dev/null 2>&1; then
+    openshell provider delete "$provider" >/dev/null
   fi
 }
 
@@ -42,6 +50,7 @@ setup_claude() {
   fi
   [[ -n "$token" ]] || { printf 'setup-openshell-client-auth: Claude token is empty\n' >&2; exit 1; }
   install_profile claude-openshell-oauth "$ROOT/clients/claude/provider.yaml"
+  replace_provider_if_requested "$CLAUDE_PROVIDER"
   if openshell provider get "$CLAUDE_PROVIDER" >/dev/null 2>&1; then
     CLAUDE_CODE_OAUTH_TOKEN="$token" openshell provider update "$CLAUDE_PROVIDER" --credential CLAUDE_CODE_OAUTH_TOKEN >/dev/null
   else
@@ -72,6 +81,7 @@ NODE
   account_id="$(printf %s "${encoded[2]}" | base64 -d)"
 
   install_profile codex-openshell-oauth "$ROOT/clients/codex/provider.yaml"
+  replace_provider_if_requested "$CODEX_PROVIDER"
   if openshell provider get "$CODEX_PROVIDER" >/dev/null 2>&1; then
     CODEX_AUTH_ACCESS_TOKEN="$access_token" CODEX_AUTH_ACCOUNT_ID="$account_id" \
       openshell provider update "$CODEX_PROVIDER" --credential CODEX_AUTH_ACCESS_TOKEN --credential CODEX_AUTH_ACCOUNT_ID >/dev/null
@@ -105,16 +115,19 @@ status() {
 }
 
 command="${1:-all}"
-if (($# > 1)); then
-  [[ $# == 2 && "$2" == --yes ]] || {
-    printf 'usage: setup-openshell-client-auth {claude|codex|all|status} [--yes]\n' >&2
-    exit 2
-  }
-fi
+shift || true
+while (($#)); do
+  case "$1" in
+    --replace) REPLACE=1 ;;
+    --yes) ;;
+    *) printf 'usage: setup-openshell-client-auth {claude|codex|all|status} [--replace] [--yes]\n' >&2; exit 2 ;;
+  esac
+  shift
+done
 case "$command" in
   claude) require_openshell; setup_claude ;;
   codex) require_openshell; setup_codex ;;
   all) require_openshell; setup_claude; setup_codex ;;
   status) status ;;
-  *) printf 'usage: setup-openshell-client-auth {claude|codex|all|status} [--yes]\n' >&2; exit 2 ;;
+  *) printf 'usage: setup-openshell-client-auth {claude|codex|all|status} [--replace] [--yes]\n' >&2; exit 2 ;;
 esac

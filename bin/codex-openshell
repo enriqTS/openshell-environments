@@ -9,13 +9,23 @@ PROVIDER="${CODEX_OPENSHELL_PROVIDER:-}"
 PROVIDER_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/openshell-clients/codex.provider"
 if [[ -z "$PROVIDER" && -f "$PROVIDER_FILE" ]]; then IFS= read -r PROVIDER <"$PROVIDER_FILE" || true; fi
 workspace_args=()
+recovery_requested=0
 case "${1:-}" in
   --openshell-recover|--openshell-recover-download)
     [[ -n "${2:-}" ]] || { printf 'usage: codex --openshell-recover[-download] SANDBOX [arguments...]\n' >&2; exit 2; }
     [[ "$1" == --openshell-recover ]] && workspace_args+=(--recover "$2") || workspace_args+=(--recover-download "$2")
+    recovery_requested=1
     shift 2
     ;;
 esac
+
+if ((recovery_requested == 0)) && [[ -n "$PROVIDER" && "$PROVIDER" != none ]] && command -v docker >/dev/null 2>&1 && docker image inspect "$IMAGE" >/dev/null 2>&1; then
+  auth_version="$(docker image inspect --format '{{ index .Config.Labels "io.openshell.client-auth" }}' "$IMAGE" 2>/dev/null || true)"
+  if [[ "$auth_version" != provider-v1 ]]; then
+    printf 'codex-openshell: image lacks provider authentication support; rebuild it with: %s/bin/openshell-image build codex\n' "$ROOT" >&2
+    exit 1
+  fi
+fi
 
 exec "$ROOT/bin/openshell-workspace" \
   --image "$IMAGE" \

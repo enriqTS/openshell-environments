@@ -28,7 +28,7 @@ claude-direct setup-token
 bin/setup-openshell-client-auth claude
 ```
 
-It imports `clients/claude/provider.yaml`, stores the token through the gateway credential store, and writes only the non-secret provider name to `${XDG_CONFIG_HOME:-$HOME/.config}/openshell-clients/claude.provider`. Re-run setup when the setup token expires or is revoked. `CLAUDE_OPENSHELL_PROVIDER=none` explicitly returns to disposable interactive login.
+It imports `clients/claude/provider.yaml`, stores the token through the gateway credential store, and writes only the non-secret provider name to `${XDG_CONFIG_HOME:-$HOME/.config}/openshell-clients/claude.provider`. Re-run setup to update the token. If the provider was created with the wrong token or must be regenerated completely, use `bin/setup-openshell-client-auth claude --replace`. `CLAUDE_OPENSHELL_PROVIDER=none` explicitly returns to disposable interactive login.
 
 Ensure `${XDG_BIN_HOME:-$HOME/.local/bin}` is on `PATH`, then run `claude [arguments...]` normally. The installed `claude` symlink invokes `bin/claude-openshell`, which uploads the current workspace, launches Claude with `HOME=/home/claude`, downloads changes, and removes the sandbox. It never builds or pulls implicitly. The installer refuses to overwrite an existing command; remove or rename that path explicitly before retrying.
 
