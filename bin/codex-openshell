@@ -21,7 +21,7 @@ esac
 
 if ((recovery_requested == 0)) && [[ -n "$PROVIDER" && "$PROVIDER" != none ]] && command -v docker >/dev/null 2>&1 && docker image inspect "$IMAGE" >/dev/null 2>&1; then
   auth_version="$(docker image inspect --format '{{ index .Config.Labels "io.openshell.client-auth" }}' "$IMAGE" 2>/dev/null || true)"
-  if [[ "$auth_version" != provider-v1 ]]; then
+  if [[ "$auth_version" != provider-v2 ]]; then
     printf 'codex-openshell: image lacks provider authentication support; rebuild it with: %s/bin/openshell-image build codex\n' "$ROOT" >&2
     exit 1
   fi

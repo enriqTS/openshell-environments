@@ -23,4 +23,4 @@ LABEL org.opencontainers.image.title="Codex client for OpenShell" \
       org.opencontainers.image.version="$OPENSHELL_ENVIRONMENTS_VERSION" \
       org.opencontainers.image.revision="$OPENSHELL_ENVIRONMENTS_REVISION" \
       io.openshell.client="codex" \
-      io.openshell.client-auth="provider-v1"
+      io.openshell.client-auth="provider-v2"

@@ -85,8 +85,12 @@ test("Codex entrypoint materializes only provider handles in native auth.json", 
   const home = join(temp, "home");
   const fakeBin = join(temp, "bin");
   const log = join(temp, "codex.log");
+  const project = join(temp, 'project."quoted"');
+  const subdir = join(project, "nested");
   await mkdir(home);
   await mkdir(fakeBin);
+  await mkdir(subdir, { recursive: true });
+  await execFileAsync("git", ["init", "-q"], { cwd: project });
   await writeFile(join(fakeBin, "codex"), `#!/usr/bin/env bash\nprintf '%s\\n' "$*" >"$CODEX_LOG"\n`);
   await chmod(join(fakeBin, "codex"), 0o755);
   const handles = {
@@ -94,6 +98,7 @@ test("Codex entrypoint materializes only provider handles in native auth.json", 
     CODEX_AUTH_ACCOUNT_ID: "openshell:resolve:env:CODEX_AUTH_ACCOUNT_ID",
   };
   await execFileAsync(join(root, "clients", "codex", "codex-openshell-entrypoint"), ["--version"], {
+    cwd: subdir,
     env: { ...process.env, CODEX_AUTH_REFRESH_TOKEN: "", CODEX_AUTH_ID_TOKEN: "", ...handles, HOME: home, PATH: `${fakeBin}:${process.env.PATH}`, CODEX_LOG: log },
   });
   const authPath = join(home, ".codex", "auth.json");
@@ -103,5 +108,8 @@ test("Codex entrypoint materializes only provider handles in native auth.json", 
   assert.equal(auth.tokens.refresh_token, "gateway-managed-refresh-token");
   assert.match(auth.tokens.id_token, /^[^.]+\.[^.]+\.placeholder$/);
   assert.equal((await stat(authPath)).mode & 0o777, 0o600);
+  const configPath = join(home, ".codex", "config.toml");
+  assert.equal(await readFile(configPath, "utf8"), `[projects.${JSON.stringify(project)}]\ntrust_level = "trusted"\n`);
+  assert.equal((await stat(configPath)).mode & 0o777, 0o600);
   assert.equal(await readFile(log, "utf8"), "--version\n");
 });

@@ -89,7 +89,7 @@ test("launchers attach configured gateway providers", async () => {
     await mkdir(config, { recursive: true });
     await writeFile(join(config, `${client}.provider`), `${client}-gateway\n`);
     await writeFile(join(fakeBin, "openshell"), `#!/usr/bin/env bash\nprintf '%s\\n' "$*" >>"$FAKE_LOG"\nexit 0\n`);
-    await writeFile(join(fakeBin, "docker"), `#!/usr/bin/env bash\nprintf '%s\\n' "$*" >>"$FAKE_LOG"\n[[ " $* " == *" --format "* ]] && printf 'provider-v1\\n'\nexit 0\n`);
+    await writeFile(join(fakeBin, "docker"), `#!/usr/bin/env bash\nprintf '%s\\n' "$*" >>"$FAKE_LOG"\n[[ " $* " == *" --format "* ]] && printf 'provider-v2\\n'\nexit 0\n`);
     await chmod(join(fakeBin, "openshell"), 0o755);
     await chmod(join(fakeBin, "docker"), 0o755);
     await execFileAsync(join(root, "bin", `${client}-openshell`), ["--version"], {

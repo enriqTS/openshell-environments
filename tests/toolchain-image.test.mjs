@@ -52,7 +52,7 @@ test("client providers expose only gateway-routed authentication handles", () =>
 
 test("Codex materializes native auth from opaque provider handles", () => {
   assert.match(codex, /COPY --chmod=0755 codex-openshell-entrypoint/);
-  assert.match(codex, /io\.openshell\.client-auth="provider-v1"/);
+  assert.match(codex, /io\.openshell\.client-auth="provider-v2"/);
   assert.match(codexEntrypoint, /CODEX_AUTH_ACCESS_TOKEN/);
   assert.match(codexEntrypoint, /CODEX_AUTH_ACCOUNT_ID/);
   assert.match(codexEntrypoint, /auth_mode: "chatgpt"/);
