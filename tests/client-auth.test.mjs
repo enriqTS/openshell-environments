@@ -31,10 +31,11 @@ async function fakeEnvironment() {
 test("Claude auth setup stores its OAuth token only in the gateway provider", async () => {
   const fixture = await fakeEnvironment();
   const token = "claude-secret-setup-token";
-  await execFileAsync(setup, ["claude"], { env: { ...fixture.env, CLAUDE_CODE_OAUTH_TOKEN: token } });
+  await execFileAsync(setup, ["claude", "--yes"], { env: { ...fixture.env, CLAUDE_CODE_OAUTH_TOKEN: token } });
 
   assert.equal(await readFile(join(fixture.config, "openshell-clients", "claude.provider"), "utf8"), "claude-openshell\n");
   const calls = await readFile(fixture.log, "utf8");
+  assert.match(calls, /settings set --global --key providers_v2_enabled --value true --yes/);
   assert.match(calls, /provider profile import .*clients\/claude\/provider.yaml/);
   assert.match(calls, /provider create --name claude-openshell --type claude-openshell-oauth --credential CLAUDE_CODE_OAUTH_TOKEN/);
   assert.doesNotMatch(calls, new RegExp(token));

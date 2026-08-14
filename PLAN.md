@@ -14,6 +14,7 @@ Make the host `claude` and `codex` terminal commands automatically launch their 
 - [x] Implemented Pi-equivalent persistent authentication through gateway providers: a custom long-lived Claude OAuth-token profile, a refresh-capable Codex OAuth profile, host-only setup/import, provider attachment, and Codex opaque-handle `auth.json` materialization. Raw host OAuth files/tokens never enter sandbox sync or activation config.
 - [x] Added fail-closed setup, launcher, provider, image, secret-argument, and auth-file tests; documented setup/rotation; all 39 tests pass.
 - [x] Reviewed the persistent-auth implementation and prepared it for commit.
+- [x] Fixed the first host setup failure: enabling global Providers v2 requires explicit OpenShell confirmation, so the explicit setup command now passes `--yes` internally (and tolerates a user-supplied trailing `--yes`).
 - [ ] Validate profile import, gateway refresh/substitution, rebuilt Codex image, and real Claude/Codex requests on the user's host (this coding sandbox has no Docker/OpenShell CLI).
 - [x] Added a build-time `claude --version` smoke test, ran all 32 repository tests, and reviewed the Claude native-binary fix; ready to commit.
 - [x] Fixed the first real Claude launch failure: generated names could reach 20 characters while OpenShell accepts at most 19. The shared launcher now dynamically truncates only the project component while preserving the client prefix and full PID suffix.

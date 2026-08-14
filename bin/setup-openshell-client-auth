@@ -10,7 +10,9 @@ CODEX_CLIENT_ID="${CODEX_OAUTH_CLIENT_ID:-app_EMoamEEZ73f0CkXaXp7hrann}"
 
 require_openshell() {
   command -v openshell >/dev/null 2>&1 || { printf 'setup-openshell-client-auth: openshell CLI is not on PATH\n' >&2; exit 127; }
-  openshell settings set --global --key providers_v2_enabled --value true >/dev/null
+  # This setup command is the user's explicit consent to enable provider profile
+  # composition; OpenShell otherwise rejects global updates without --yes.
+  openshell settings set --global --key providers_v2_enabled --value true --yes >/dev/null
 }
 
 install_profile() {
@@ -106,10 +108,16 @@ status() {
 }
 
 command="${1:-all}"
+if (($# > 1)); then
+  [[ $# == 2 && "$2" == --yes ]] || {
+    printf 'usage: setup-openshell-client-auth {claude|codex|all|status} [--yes]\n' >&2
+    exit 2
+  }
+fi
 case "$command" in
   claude) require_openshell; setup_claude ;;
   codex) require_openshell; setup_codex ;;
   all) require_openshell; setup_claude; setup_codex ;;
   status) status ;;
-  *) printf 'usage: setup-openshell-client-auth {claude|codex|all|status}\n' >&2; exit 2 ;;
+  *) printf 'usage: setup-openshell-client-auth {claude|codex|all|status} [--yes]\n' >&2; exit 2 ;;
 esac
