@@ -15,10 +15,12 @@ require_openshell() {
 
 install_profile() {
   local id="$1" file="$2"
-  openshell provider profile lint -f "$file" >/dev/null
   if openshell provider profile export "$id" -o yaml >/dev/null 2>&1; then
+    # `profile lint` rejects a valid replacement file when its custom ID is
+    # already registered. `profile update` performs the required validation.
     openshell provider profile update "$id" -f "$file" >/dev/null
   else
+    openshell provider profile lint -f "$file" >/dev/null
     openshell provider profile import -f "$file" >/dev/null
   fi
 }
