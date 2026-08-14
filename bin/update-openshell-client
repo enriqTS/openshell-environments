@@ -44,6 +44,7 @@ rm -- "$target"
 restore_needed=1
 export OPENSHELL_UPDATE_TARGET="$target"
 
+codex_npm_prefix=""
 case "$client" in
   pi)
     "${CURL:-curl}" -fsSL "${PI_INSTALLER_URL:-https://pi.dev/install.sh}" | sh
@@ -52,16 +53,18 @@ case "$client" in
     "${CURL:-curl}" -fsSL "${CLAUDE_INSTALLER_URL:-https://claude.ai/install.sh}" | bash
     ;;
   codex)
-    "${NPM:-npm}" i -g "${CODEX_NPM_PACKAGE:-@openai/codex}"
+    # A system npm prefix is normally root-owned. Keep the vendor installation
+    # user-owned, while the public command remains this restored launcher.
+    codex_npm_prefix="${CODEX_NPM_PREFIX:-${XDG_DATA_HOME:-$HOME/.local/share}/openshell-clients/codex/npm}"
+    "${NPM:-npm}" i -g --prefix "$codex_npm_prefix" "${CODEX_NPM_PACKAGE:-@openai/codex}"
     ;;
 esac
 
 vendor_binary=""
 if [[ -x "$target" ]]; then
   vendor_binary="$(readlink -f -- "$target")"
-elif [[ "$client" == codex ]]; then
-  npm_prefix="$("${NPM:-npm}" prefix -g)"
-  [[ -x "$npm_prefix/bin/codex" ]] && vendor_binary="$(readlink -f -- "$npm_prefix/bin/codex")"
+elif [[ "$client" == codex && -x "$codex_npm_prefix/bin/codex" ]]; then
+  vendor_binary="$(readlink -f -- "$codex_npm_prefix/bin/codex")"
 fi
 [[ -n "$vendor_binary" && "$vendor_binary" != "$launcher" ]] || {
   printf 'update-openshell-client: vendor installer did not produce a new %s executable\n' "$client" >&2

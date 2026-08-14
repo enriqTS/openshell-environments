@@ -4,6 +4,11 @@
 
 Make `pi-customizations` completely unaware of OpenShell. The only dependency must point from this repository to a generic, published `pi-customizations` asset archive: `openshell-environments` downloads that archive and owns everything required to build, install, configure, authenticate, update, and launch the Pi OpenShell client.
 
+### Current maintenance
+
+- [x] Make Codex vendor updates use a user-owned npm prefix rather than the non-writable system global prefix; regression coverage verifies the installed binary and launcher restoration.
+- [x] Ran `npm test` (54/54), reviewed the diff, and committed this maintenance fix.
+
 ## Target boundary
 
 ### `pi-customizations` retains
