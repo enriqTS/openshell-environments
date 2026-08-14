@@ -17,6 +17,11 @@ for (const [name, policy] of [["base", base], ["Pi", pi], ["Claude", claude], ["
   });
 }
 
+test("interactive-login clients keep general HTTPS opaque instead of intercepting OAuth TLS", () => {
+  assert.doesNotMatch(claude, /protocol: rest/);
+  assert.doesNotMatch(codex, /protocol: rest/);
+});
+
 test("client-only filesystem permissions are not in the shared base", () => {
   assert.doesNotMatch(base, /pi-customizations|\/home\/(pi|claude|codex)/);
   assert.match(pi, /\/opt\/pi-customizations/);

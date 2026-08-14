@@ -141,6 +141,5 @@ network_policies:
           - "203.128.0.0/9"
           - "204.0.0.0/6"
           - "208.0.0.0/4"
-        protocol: rest
-        access: read-write
-        enforcement: enforce
+        # Keep general HTTPS as an opaque L4 relay. Claude's platform login
+        # endpoint rejects OpenShell's REST/TLS interception with HTTP 403.

@@ -141,6 +141,5 @@ network_policies:
           - "203.128.0.0/9"
           - "204.0.0.0/6"
           - "208.0.0.0/4"
-        protocol: rest
-        access: read-write
-        enforcement: enforce
+        # Keep interactive OAuth/device-auth HTTPS as an opaque L4 relay.
+        # Provider-specific L7 rules may still be layered by OpenShell.
